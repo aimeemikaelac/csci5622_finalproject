@@ -1,15 +1,87 @@
 
 import argparse
 import csv
+import nltk
+import re
 from sets import Set
 from sklearn import linear_model
 from sklearn.feature_extraction.text import CountVectorizer
+from nltk.corpus import wordnet as wn
 from sklearn.linear_model.stochastic_gradient import SGDClassifier
 from sklearn.metrics import mean_squared_error
 import sys
 
 import numpy as np
 
+
+VALID_POS = ['FW', 'JJ', 'JJR', 'JJS', 'MD', 'NN', 'NNS', 
+             'NNP', 'NNPS', 'PDT', 'POS', 'RB', 'RBR', 'RBS',
+             'RP', 'VB', 'VBD', 'VBG', 'VBN', 'VBP', 'VBZ',
+             'WDT', 'WRB']
+
+class Analyzer:
+    def __init__(self, word=False, speech=False, capital=False, all_upper=False, foreign=False, unique=False, dictionary=dict(), use_dictionary=False, ngram_range=(1,1)):
+        self.word = word
+        self.speech = speech
+        self.capital = capital
+        self.ngram_range = ngram_range
+        self.all_upper = all_upper
+        self.foreign = foreign
+        self.dictionary = dictionary
+        self.use_dictionary = use_dictionary
+        self.unique=unique
+    
+    def strip_tags_from_words(self, word_list):
+        stripped_words = []
+        for word_feature in word_list:
+            stripped_words.append(word_feature.split(":")[0])
+        return stripped_words
+    
+    def __call__(self, feature_string):
+        feats = feature_string.split()
+        
+        if self.word and self.ngram_range != (1,1):
+            current_words = self.strip_tags_from_words(feats)
+            for ngram_length in range(self.ngram_range[0], self.ngram_range[1]+1):
+                    for ngram in zip(*[current_words[i:] for i in range(3)]):
+                        ngram = " ".join(ngram)
+                        yield ngram
+#                     for j in range(self.ngram_range[0], self.ngram_range[1]):
+        
+        for feat_tuple in feats:
+            feat_tokens = feat_tuple.split(":")
+            
+            if self.word: #and self.ngram_range == (1,1):
+                yield feat_tokens[0]
+                
+            if self.speech:
+                if feat_tokens[1] in VALID_POS:
+                    yield feat_tokens[1]
+                    
+            if self.capital:
+                if feat_tokens[2] == "C":
+                    yield feat_tokens[2]
+                    
+            if self.all_upper:
+                if feat_tokens[3] == "U":
+                    yield feat_tokens[3]
+                    
+            if self.foreign:
+                if feat_tokens[4] == "F":
+                    yield feat_tokens[4]
+                    
+            if self.unique:
+                if feat_tokens[5] == "UN":
+                    yield feat_tokens[5]
+            
+#             if self.key:
+#                     if feat_tokens[6] == "KEY":
+#                         yield feat_tokens[6]
+                    
+            if self.use_dictionary:
+                for category in self.dictionary:
+                    if feat_tokens[0] in self.dictionary[category]:
+                        yield category.upper()
 
 class Example:
     def __init__(self):
@@ -31,14 +103,15 @@ class Question:
         
 class Featurizer:
     def __init__(self, use_default=False, analyzer=u'word'):
+        self.stop_words=['uner', 'via', 'answer', 'ANSWER', 'was', 'his','the','that','and', 'points', 'pointsname', 'this', 'for', 'who', 'they','can', 'its', 'also', 'these', 'are', 'name', 'after', 'than', 'had', 'with', 'about', 'ftp', '10', '15', 'this', 'from', 'not', 'has', 'well']
         if use_default:
 #             self.stop_words=['was', 'his','the','that','and', 'points', 'pointsname', 'this', 'for', 'who', 'one', 'two', 'three', 'four', 'ten', 'they','can', 'its']
 #             self.vectorizer = CountVectorizer(token_pattern=u'(?u)\\b[a-zA-Z]{2}[a-zA-Z]+|[0-9]{4}\\b', ngram_range=(1,7), stop_words=self.stop_words)
-            self.vectorizer = CountVectorizer()
+            self.vectorizer = CountVectorizer(ngram_range=(1,20), stop_words=self.stop_words)
         else:
 #             self.
 #             self.vectorizer = CountVectorizer(token_pattern=u'(?u)\\b[a-zA-Z]{2}[a-zA-Z]+|[0-9]{4}\\b', stop_words=['was', 'his','the','that','and', 'points', 'pointsname', 'this', 'for', 'who', 'they','can', 'its', 'also', 'these', 'are', 'name', 'after', 'than', 'had', 'with', 'about', 'ftp', '10', '15']ngram_range=(1,7), analyzer = analyzer, stop_words=self.stop_words)
-            self.vectorizer = CountVectorizer(analyzer=analyzer, ngram_range=(1,7))
+            self.vectorizer = CountVectorizer(analyzer=analyzer)
 
 
     def train_feature(self, examples, limit=-1):
@@ -69,13 +142,73 @@ class Featurizer:
         self.show_topN(classifier, categories, 20)
 
 def all_examples(limit, examples):
-    for example in examples:
-        example_str = ""
-#         example_str += "CAT:"+example.question.category
+    
+    for current_example in examples:
+#         example_str = ""
+#         example_str += "CAT:"+current_example.question.category
 #         example_str += " "
-        example_str += example.question.question
+#         example_str += current_example.question.question
+        tagged_example_str = tagged_example(current_example.question.question, current_example.question.category, current_example.question.keywords, current_example.question.answer) 
+        yield tagged_example_str
+
+def tagged_example(question, category, keywords, answer):
+#     print keywords
+    annotated_words = []
+    stop_words=['uner', 'via', 'answer', 'ANSWER', 'was', 'his','the','that','and', 'points', 'pointsname', 'this', 'for', 'who', 'they','can', 'its', 'also', 'these', 'are', 'name', 'after', 'than', 'had', 'with', 'about', 'ftp', '10', '15', 'this', 'from', 'not', 'has', 'well']
+    prev_word = ""
+    prev_word_unannotated = ""
+    reg_exp = re.compile(u'(?u)\\b[a-zA-Z]{2}[a-zA-Z]+|[0-9]{4}\\b')
+    reg_exp_alphanum = re.compile(u'\\w')
+#     for key in keywords:#question.split():
+#         word = keywords[key]
+    words = question.split()
+    words.append(answer);
+    for key in keywords:
+        words.append(keywords[key])
+    for word in words:
+#         print word
+        result = reg_exp.match(word)
+        if result is None:
+            continue
+        original_annotated_word = result.string[result.start(0):result.end(0)]
+        annotated_word = original_annotated_word
+        if original_annotated_word.lower() in stop_words:
+            prev_word_unannotated = word
+            continue
+        annotated_word += ":"
+#        TODO: this is where POS classification would go
+        annotated_word += ":"
+        if original_annotated_word[0].isupper() and len(prev_word_unannotated) > 0 and reg_exp_alphanum.match(prev_word_unannotated[len(prev_word_unannotated)-1]):
+            annotated_word+="C"
+        annotated_word += ":"
+        if original_annotated_word.isupper():
+            annotated_word+="U"
+        annotated_word += ":"
+        if not wn.synsets(original_annotated_word):
+            annotated_word+="F"
+        annotated_word += ":"    
+#         sum_t = sum(1 for x in keywords.values() if(word == x))
+#         print str(word) + " " + str(sum_t)
+#         if sum_t == 1:
+        if words.count(original_annotated_word) == 1:
+            annotated_word+="UN"
+        annotated_words.append(annotated_word)
+        prev_word = original_annotated_word
+        prev_word_unannotated = word
+
         
-        yield example_str
+#     tokenized_words = nltk.tokenize.word_tokenize(words)
+#     print 'tokenized iteration: '+ str(current_example.counter)
+#     current_example.counter += 1
+#     tagged_words = nltk.pos_tag(tokenized_words)
+#     tagged_line = ""
+#     for word, tag in tagged_words:
+#         tagged_line += (word + ":" +tag + " ")
+#     return tagged_line
+#     return ""
+    tagged = " ".join(annotated_words)
+#     print tagged
+    return tagged
 
 def stringToInt(s):
     return int(float(s))
@@ -86,7 +219,8 @@ def rootMeanSquaredError(examples):
     return mean_squared_error(predictions, observations) ** 0.5
 
 def producePredictions(trainingExamples, testExamples):
-    featurizer = Featurizer(use_default=True)
+    analyzer = Analyzer(word=True, speech=False, capital=True, all_upper=True, foreign=True, dictionary=[], use_dictionary=False, unique=False, ngram_range=(1,4))
+    featurizer = Featurizer(use_default=False, analyzer=analyzer)
     x_train = featurizer.train_feature(trainingExamples)
     x_test = featurizer.test_feature(testExamples)
     y_train = []
@@ -114,10 +248,11 @@ def producePredictions(trainingExamples, testExamples):
 #     stdDev = np.std([x.observation for x in trainingSet])
 # 
 #     # Produce predictions
-#     for example in testSet:
-#         example.prediction = averageTime
+#     for current_example in testSet:
+#         current_example.prediction = averageTime
 
 if __name__ == "__main__":
+    nltk.download('wordnet')
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--local", help="Use training data as a test of the model",
                            action='store_true', default=True, required=False)
@@ -136,7 +271,10 @@ if __name__ == "__main__":
     reader = csv.DictReader(fin, ['id', 'answer', 'type', 'category', 'question', 'keywords'])
     questions = dict()
     for row in reader:
-        question = Question(row['question'], row['category'], row['keywords'], row['answer'], row['type'], row['id'])
+        key_dict = eval(row['keywords'])
+#         for key in key_dict:
+#             print key_dict[key]
+        question = Question(row['question'], row['category'], key_dict, row['answer'], row['type'], row['id'])
         questions[int(row['id'])] = question
     fin.close()
     
@@ -146,18 +284,18 @@ if __name__ == "__main__":
     reader = csv.DictReader(fin)
     examples = []
     for row in reader:
-        example = Example()
-        example.id = row['id']
-        example.question = questions[int(row['question'])]
-        example.user = row['user']
-        example.observation = stringToInt(row['position'])
-        example.answer = row['answer']
-        examples.append(example)
+        current_example = Example()
+        current_example.id = row['id']
+        current_example.question = questions[int(row['question'])]
+        current_example.user = row['user']
+        current_example.observation = stringToInt(row['position'])
+        current_example.answer = row['answer']
+        examples.append(current_example)
     fin.close()
     
     print "\nRead data"
-
-    #    example.observation = (example.observation - mean)/dev
+    
+    #    current_example.observation = (current_example.observation - mean)/dev
 
     # Define cross-validation parameters
     if args.local:
@@ -215,11 +353,11 @@ if __name__ == "__main__":
         reader = csv.DictReader(fin)
         testExamples = []
         for row in reader:
-            example = Example()
-            example.id = row['id']
-            example.question = questions[int(row['question'])]
-            example.user = row['user']
-            testExamples.append(example)
+            current_example = Example()
+            current_example.id = row['id']
+            current_example.question = questions[int(row['question'])]
+            current_example.user = row['user']
+            testExamples.append(current_example)
         fin.close()
      
         # Generate predictions
