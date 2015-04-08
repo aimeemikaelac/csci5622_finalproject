@@ -107,7 +107,7 @@ class Featurizer:
         if use_default:
 #             self.stop_words=['was', 'his','the','that','and', 'points', 'pointsname', 'this', 'for', 'who', 'one', 'two', 'three', 'four', 'ten', 'they','can', 'its']
 #             self.vectorizer = CountVectorizer(token_pattern=u'(?u)\\b[a-zA-Z]{2}[a-zA-Z]+|[0-9]{4}\\b', ngram_range=(1,7), stop_words=self.stop_words)
-            self.vectorizer = CountVectorizer(ngram_range=(1,20), stop_words=self.stop_words)
+            self.vectorizer = CountVectorizer(ngram_range=(1,10), stop_words=self.stop_words)
         else:
 #             self.
 #             self.vectorizer = CountVectorizer(token_pattern=u'(?u)\\b[a-zA-Z]{2}[a-zA-Z]+|[0-9]{4}\\b', stop_words=['was', 'his','the','that','and', 'points', 'pointsname', 'this', 'for', 'who', 'they','can', 'its', 'also', 'these', 'are', 'name', 'after', 'than', 'had', 'with', 'about', 'ftp', '10', '15']ngram_range=(1,7), analyzer = analyzer, stop_words=self.stop_words)
@@ -219,8 +219,8 @@ def rootMeanSquaredError(examples):
     return mean_squared_error(predictions, observations) ** 0.5
 
 def producePredictions(trainingExamples, testExamples):
-    analyzer = Analyzer(word=True, speech=False, capital=True, all_upper=True, foreign=True, dictionary=[], use_dictionary=False, unique=False, ngram_range=(1,4))
-    featurizer = Featurizer(use_default=False, analyzer=analyzer)
+    analyzer = Analyzer(word=True, speech=False, capital=True, all_upper=True, foreign=True, dictionary=[], use_dictionary=False, unique=False, ngram_range=(1,1))
+    featurizer = Featurizer(use_default=True, analyzer=analyzer)
     x_train = featurizer.train_feature(trainingExamples)
     x_test = featurizer.test_feature(testExamples)
     y_train = []
