@@ -58,6 +58,8 @@ def prepare_question(question):
 
 
 if __name__ == "__main__":
+    #7949 lines in questions.csv -> 7948 questions
+    #-> 1987 questions for 4 threads
     nltk.download('brown')
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--limit", help="Limit number of questions to preprocess",
@@ -94,39 +96,20 @@ if __name__ == "__main__":
             continue
         if (limit > 0 and count >= limit) or (end > 0 and position_count >= end):
             break
-        id = row['id']
+        q_id = row['id']
         answer = row['answer']
-        type = row['type']
+        q_type = row['type']
         category = row['category']
         question = row['question']
-        print question
+#         print question
         keywords = row['keywords']
         prepared_question = prepare_question(question)
-        tagged_question = tag_question(tagger, prepared_question, id)
-        print tagged_question
-        writer.writerow({'id':id, 'answer':answer,'type':type,'category':category,'question':tagged_question, 'keywords':keywords})
+        tagged_question = tag_question(tagger, prepared_question, q_id)
+#         print tagged_question
+        writer.writerow({'id':q_id, 'answer':answer,'type':q_type,'category':category,'question':tagged_question, 'keywords':keywords})
         count = count + 1
         position_count = position_count + 1
         
     infile.close()
     outfile.close()
     print 'Finished'
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
