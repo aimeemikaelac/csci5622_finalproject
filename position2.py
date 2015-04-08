@@ -63,7 +63,7 @@ if __name__ == "__main__":
     for ii in train:
         #Feature dictionary
         d = {}
-        d['Qid'] = ii['question']
+        # d['Qid'] = ii['question']
         d['user'] = ii['user']
         d['userpos'] = ii['AvgUserPos']
         d['qpos'] = ii['AvgQuestPos']
@@ -78,8 +78,8 @@ if __name__ == "__main__":
         #todo: try word/proper nouns before AvgQuest/UserPos
 
         if int(ii['id']) % 5 == 0:
-            # dev_test.append((d, abs(int(float(ii['position'])))))
-            dev_test.append((d, abs(int(float(ii['RoundPos'])))))
+            dev_test.append((d, abs(int(float(ii['position'])))))
+            # dev_test.append((d, int(float(ii['position']))))
 
         else:
             # dev_train.append((d, abs(int(float(ii['position'])))))
