@@ -9,6 +9,10 @@ from nltk.util import ngrams
 
 from sklearn.metrics import mean_squared_error
 
+import wikipedia
+import ast
+import re
+
 def morphy_stem(word):
     """
     Simple stemmer
@@ -19,6 +23,8 @@ def morphy_stem(word):
     # else:
     #     return word.lower()
 
+def myround(x, base=5):
+    return int(base * round(float(x)/base))
 
 
 if __name__ == "__main__":
@@ -45,12 +51,26 @@ if __name__ == "__main__":
         # print ii[None][2]       #Category
         # print ii[None][3]       #Question (all words)
         # print ii[None][4]       #Question (no stopwords)
+        # print ii[None][5]       #Wiki article length (28000 avg, 0 was no article)
 
         # print ''
         question_data[int(ii['r'])] = [ii[None][0], ii[None][2], 
-                                        ii[None][3], ii[None][4]]
+                                        ii[None][3], ii[None][4],
+                                         ii[None][5]]
+
+    # datamap = ast.literal_eval(question_data[1][2])
+            # print question_data[1][3]
+
+            # datamap = eval(question_data[1][3])
+
+            # if isinstance(datamap, dict):
+            #     print 'HI!'
+            #     print datamap[1]
+            # else:
+            #     print 'NOPE!', datamap
     ###question_data[id][0]=answer, [id][1]=caegory
     ### [id][2]=question, [id][3]=question(no stopwords)
+    ### [id][4]=wikilength
 
     # Read in training data
     train = DictReader(open("train2.csv", 'r'))
@@ -59,38 +79,65 @@ if __name__ == "__main__":
     dev_train = []
     dev_test = []
     full_train = []
+    wikilen = 0
+    qwer = 0
+    ee = 0
 
     for ii in train:
         #Feature dictionary
-        d = {}
+        d = defaultdict(int)
         # d['Qid'] = ii['question']
-        d['user'] = ii['user']
-        d['userpos'] = ii['AvgUserPos']
-        d['qpos'] = ii['AvgQuestPos']
+        # d['user1'] = int(float(ii['user']))
+        d['userpos1'] = int(float(ii['AvgUserPos']))
+        d['qpos1'] = int(float(ii['AvgQuestPos']))
+        d['diff'] = int(float(ii['AvgQuestPos'])) - int(float(ii['AvgUserPos']))
+            
+        # print d['wiki_len']
+        
 
         ##usually not useful
-        d['category'] = question_data[int(ii['question'])][1]
+        # d['category1'] = question_data[int(ii['question'])][1]
+        # d['wikilen1'] = int(question_data[int(ii['question'])][4])
+
+        # for word in question_data[int(ii['question'])][2].split():
+        #     word = re.sub(r'[\W_]+', '', word)
+        #     word = word.lower()
+        #     # print word
+        #     d[word] += 1
 
         ##not so useful 
         # d['length'] = len(question_data[int(ii['question'])][2])
-        # d['length'] = len(question_data[int(ii['question'])][3]) 
+        # d['length'] = len(set(question_data[int(ii['question'])][3]))
+        # d['words'] = question_data[int(ii['question'])][3]
+
+
+        # print question_data[int(ii['question'])][3][0]
+        # d['words'] = question_data[int(ii['question'])][3].values()
+
+
 
         #todo: try word/proper nouns before AvgQuest/UserPos
 
         if int(ii['id']) % 5 == 0:
+            ### Positive only
             dev_test.append((d, abs(int(float(ii['position'])))))
+            ### With negatives
             # dev_test.append((d, int(float(ii['position']))))
 
         else:
+            ### Positive only
             # dev_train.append((d, abs(int(float(ii['position'])))))
-            dev_train.append((d, abs(int(float(ii['RoundPos'])))))
+            # dev_train.append((d, abs(int(float(ii['RoundPos'])))))
+            dev_train.append((d, myround(abs(int(float(ii['position']))), 5)))
+            #### With negatives
+            # dev_train.append((d, int(float(ii['RoundPos']))))
 
         # full_train.append((d, abs(int(float(ii['position'])))))
 
     # Train a classifier
     print("Training classifier ...")
     classifier = nltk.classify.NaiveBayesClassifier.train(dev_train)
-    # classifier = nltk.classify.MaxentClassifier.train(dev_train, 'IIS', trace=3, max_iter=3)
+    # classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=3, max_iter=3)
 
     total = len(dev_test)
     predictions = []

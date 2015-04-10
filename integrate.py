@@ -1,6 +1,7 @@
 import csv
 import numpy as np
 from csv import DictReader, DictWriter
+import wikipedia
 
 train = DictReader(open("train.csv", 'r'))
 
