@@ -1,12 +1,15 @@
 
+from _collections import defaultdict
 import argparse
+from collections import Counter
 import csv
 import nltk
+from nltk.corpus import wordnet as wn
+import numpy
 import re
 from sets import Set
 from sklearn import linear_model
 from sklearn.feature_extraction.text import CountVectorizer
-from nltk.corpus import wordnet as wn
 from sklearn.linear_model.stochastic_gradient import SGDClassifier
 from sklearn.metrics import mean_squared_error
 import sys
@@ -19,17 +22,25 @@ VALID_POS = ['FW', 'JJ', 'JJR', 'JJS', 'MD', 'NN', 'NNS',
              'RP', 'VB', 'VBD', 'VBG', 'VBN', 'VBP', 'VBZ',
              'WDT', 'WRB']
 
+# question_features = {}
+# user_features = {}
+
 class Analyzer:
-    def __init__(self, word=False, speech=False, capital=False, all_upper=False, foreign=False, unique=False, dictionary=dict(), use_dictionary=False, ngram_range=(1,1)):
-        self.word = word
-        self.speech = speech
-        self.capital = capital
-        self.ngram_range = ngram_range
-        self.all_upper = all_upper
-        self.foreign = foreign
-        self.dictionary = dictionary
-        self.use_dictionary = use_dictionary
-        self.unique=unique
+    def __init__(self, features):#word=False, speech=False, capital=False, all_upper=False, foreign=False, 
+#                  unique=False, dictionary=dict(), use_dictionary=False, ngram_range=(1,1), user_average=False):
+#         self.word = word
+#         self.speech = speech
+#         self.capital = capital
+#         self.ngram_range = ngram_range
+#         self.all_upper = all_upper
+#         self.foreign = foreign
+#         self.dictionary = dictionary
+#         self.use_dictionary = use_dictionary
+#         self.unique=unique
+#         self.user_average = user_average
+        self.features = defaultdict(lambda: False)
+        for feature in features:
+            self.features[feature] = features[feature]
     
     def strip_tags_from_words(self, word_list):
         stripped_words = []
@@ -38,39 +49,44 @@ class Analyzer:
         return stripped_words
     
     def __call__(self, feature_string):
-        feats = feature_string.split()
-        
-        if self.word and self.ngram_range != (1,1):
-            current_words = self.strip_tags_from_words(feats)
-            for ngram_length in range(self.ngram_range[0], self.ngram_range[1]+1):
+        feature_strings = feature_string.split("|")
+#         print feature_strings
+        user_features = feature_strings[0]
+#         print user_features
+        question_features = feature_strings[1].split()
+#         print question_features
+#         print self.features
+        if self.features['ngram_range'] != (1,1):
+            current_words = self.strip_tags_from_words(question_features)
+            for ngram_length in range(self.features['ngram_range'][0], self.features['ngram_range'][1]+1):
                     for ngram in zip(*[current_words[i:] for i in range(3)]):
                         ngram = " ".join(ngram)
                         yield ngram
-#                     for j in range(self.ngram_range[0], self.ngram_range[1]):
         
-        for feat_tuple in feats:
+        for feat_tuple in question_features:
             feat_tokens = feat_tuple.split(":")
-            
-            if self.word: #and self.ngram_range == (1,1):
+#             print feat_tuple
+            if self.features['word']: #and self.ngram_range == (1,1):
                 yield feat_tokens[0]
                 
-            if self.speech:
-                if feat_tokens[1] in VALID_POS:
+            if self.features['speech']:
+                if feat_tokens[1] != "Unk":
+#                     print feat_tokens[1]
                     yield feat_tokens[1]
                     
-            if self.capital:
+            if self.features['capital']:
                 if feat_tokens[2] == "C":
                     yield feat_tokens[2]
                     
-            if self.all_upper:
+            if self.features['all_upper']:
                 if feat_tokens[3] == "U":
                     yield feat_tokens[3]
                     
-            if self.foreign:
+            if self.features['foreign']:
                 if feat_tokens[4] == "F":
                     yield feat_tokens[4]
                     
-            if self.unique:
+            if self.features['unique']:
                 if feat_tokens[5] == "UN":
                     yield feat_tokens[5]
             
@@ -78,10 +94,22 @@ class Analyzer:
 #                     if feat_tokens[6] == "KEY":
 #                         yield feat_tokens[6]
                     
-            if self.use_dictionary:
+            if self.features['use_dictionary']:
                 for category in self.dictionary:
                     if feat_tokens[0] in self.dictionary[category]:
                         yield category.upper()
+        
+        user_features_tokens = user_features.split(":")
+#             user_feat_tokens = user_feature_tuple.split(":")
+#         print user_features_tokens
+        if self.features['user_average']:
+#                 print user_feat_tokens
+            if user_features_tokens[0] == "USR_AVG":
+#                 print "here"
+                for i in range(int(float(user_features_tokens[1]))):
+                    yield "USR_AVG"
+
+
 
 class Example:
     def __init__(self):
@@ -91,6 +119,8 @@ class Example:
         self.answer = ""
         self.observation =  0
         self.prediction = 0
+
+
         
 class Question:
     def __init__(self, question, category, keywords, answer, q_type, q_id):
@@ -100,27 +130,64 @@ class Question:
         self.answer = answer
         self.q_type = q_type
         self.q_id = int(q_id)
+ 
+ 
+        
+class User:
+    def __init__(self, u_id):
+        self.u_id = u_id
+        self.average_position = 0
+        self.num_questions = 0
+        self.num_correct = 0
+        self.num_incorrect = 0
+        self.questions = {}
+        
+    def add_question(self, q_id, correct, position, answer):
+        self.questions[q_id] = {'q_id':q_id, 'correct':correct, 'position':position, 'answer':answer}
+        current_total = self.num_questions#self.num_correct + self.num_incorrect
+        current_position_sum = self.average_position*current_total
+        updated_total = current_total + 1
+        updated_sum = current_position_sum + position
+        self.average_position = updated_sum/updated_total
+        if correct:
+            self.num_correct = self.num_correct + 1
+        else:
+            self.num_incorrect = self.num_incorrect + 1
+        self.num_questions = self.num_questions + 1
+
+
         
 class Featurizer:
-    def __init__(self, use_default=False, analyzer=u'word'):
+    def __init__(self, features=defaultdict(lambda: False), use_default=False, analyzer=u'word'):
         self.stop_words=['uner', 'via', 'answer', 'ANSWER', 'was', 'his','the','that','and', 'points', 'pointsname', 'this', 'for', 'who', 'they','can', 'its', 'also', 'these', 'are', 'name', 'after', 'than', 'had', 'with', 'about', 'ftp', '10', '15', 'this', 'from', 'not', 'has', 'well']
+        
         if use_default:
-#             self.stop_words=['was', 'his','the','that','and', 'points', 'pointsname', 'this', 'for', 'who', 'one', 'two', 'three', 'four', 'ten', 'they','can', 'its']
-#             self.vectorizer = CountVectorizer(token_pattern=u'(?u)\\b[a-zA-Z]{2}[a-zA-Z]+|[0-9]{4}\\b', ngram_range=(1,7), stop_words=self.stop_words)
             self.vectorizer = CountVectorizer(ngram_range=(1,10), stop_words=self.stop_words)
+            self.default = True
+            self.features = features
         else:
-#             self.
-#             self.vectorizer = CountVectorizer(token_pattern=u'(?u)\\b[a-zA-Z]{2}[a-zA-Z]+|[0-9]{4}\\b', stop_words=['was', 'his','the','that','and', 'points', 'pointsname', 'this', 'for', 'who', 'they','can', 'its', 'also', 'these', 'are', 'name', 'after', 'than', 'had', 'with', 'about', 'ftp', '10', '15']ngram_range=(1,7), analyzer = analyzer, stop_words=self.stop_words)
             self.vectorizer = CountVectorizer(analyzer=analyzer)
+            self.default = False
+            self.features = features
 
 
-    def train_feature(self, examples, limit=-1):
+    def train_feature(self, examples, users, limit=-1):
 #         return self.vectorizer.fit_transform(examples)
-        return self.vectorizer.fit_transform(ex for ex in all_examples(limit, examples))
+        count_features = self.vectorizer.fit_transform(ex for ex in all_examples(limit, examples, users, self.features, default = self.default))
+#         features = numpy.array
+#         features = []
+#         for ex in examples:
+#             current_features = []
+#             for feature in all_examples(limit, [ex], users, self.features, default = self.default):
+#                 current_features.append(feature)
+#             features.append(current_features)
+#         print features
+        return count_features
+            
 
-    def test_feature(self, examples, limit=-1):
+    def test_feature(self, examples, users, limit=-1):
 #         return self.vectorizer.transform(examples)
-        return self.vectorizer.transform(ex for ex in all_examples(limit, examples))
+        return self.vectorizer.transform(ex for ex in all_examples(limit, examples, users, self.features, default = self.default))
 
     def show_topN(self, classifier, categories, N=10):
         feature_names = np.asarray(self.vectorizer.get_feature_names())
@@ -141,115 +208,221 @@ class Featurizer:
     def show_top20(self, classifier, categories):
         self.show_topN(classifier, categories, 20)
 
-def all_examples(limit, examples):
+
+
+def all_examples(limit, examples, users, features, default=False):
     
     for current_example in examples:
 #         example_str = ""
 #         example_str += "CAT:"+current_example.question.category
 #         example_str += " "
 #         example_str += current_example.question.question
-        tagged_example_str = tagged_example(current_example.question.question, current_example.question.category, current_example.question.keywords, current_example.question.answer) 
+        current_user = users[current_example.user]
+#         print current_example.question
+#         print current_example.observation
+        tagged_example_str = get_example_features(features, current_example.question, current_user, default) 
         yield tagged_example_str
 
-def tagged_example(question, category, keywords, answer):
-#     print keywords
+
+        
+def get_user_features(features, user):
+#     if user.u_id in user_features:
+#         return user_features[user.u_id]
+    
+    average = str(abs(user.average_position))
+#     print average
+    user_feature = ""
+    if features['user_average']:
+#         print average
+        user_feature += "USR_AVG:"+average 
+#     if user.u_id not in user_features:
+#         user_features[user.u_id] = user_feature 
+    return user_feature
+
+
+        
+def get_question_features(features, question_container):
+#     print features
+#     print question_container
+    question = question_container.question
+    category = question_container.category
+    keywords = question_container.keywords
+    answer = question_container.answer
+    question_id = question_container.q_id
+#     if question_id in question_features:
+#         return question_features[question_id]
+    
     annotated_words = []
     stop_words=['uner', 'via', 'answer', 'ANSWER', 'was', 'his','the','that','and', 'points', 'pointsname', 'this', 'for', 'who', 'they','can', 'its', 'also', 'these', 'are', 'name', 'after', 'than', 'had', 'with', 'about', 'ftp', '10', '15', 'this', 'from', 'not', 'has', 'well']
     prev_word = ""
     prev_word_unannotated = ""
     reg_exp = re.compile(u'(?u)\\b[a-zA-Z]{2}[a-zA-Z]+|[0-9]{4}\\b')
     reg_exp_alphanum = re.compile(u'\\w')
-#     for key in keywords:#question.split():
-#         word = keywords[key]
-    words = question.split()
-    words.append(answer);
-    for key in keywords:
-        words.append(keywords[key])
-    for word in words:
-#         print word
+
+    words = {}
+    pos = {}
+    
+    word_index = 0
+    for word_tuple in question:
+        words[word_index] = word_tuple[0]
+        pos[word_index] = word_tuple[1]
+        word_index = word_index + 1
+    
+    c = Counter([values for values in words.itervalues()])
+    counts = dict(c)
+    
+#     words[word_index] = answer
+#     word_index = word_index + 1
+
+#     for key in keywords:
+#         words[word_index] = keywords[key]
+#         word_index = word_index + 1
+        
+    for word_index in words:
+        word = words[word_index]
         result = reg_exp.match(word)
         if result is None:
             continue
         original_annotated_word = result.string[result.start(0):result.end(0)]
-        annotated_word = original_annotated_word
+        annotated_word = ""
+        if features['word']:
+#             print 'here'
+            annotated_word = original_annotated_word
         if original_annotated_word.lower() in stop_words:
             prev_word_unannotated = word
             continue
         annotated_word += ":"
-#        TODO: this is where POS classification would go
+        if features['speech'] and word_index in pos:
+            annotated_word += pos[word_index]
         annotated_word += ":"
-        if original_annotated_word[0].isupper() and len(prev_word_unannotated) > 0 and reg_exp_alphanum.match(prev_word_unannotated[len(prev_word_unannotated)-1]):
+        if features['capital'] and original_annotated_word[0].isupper() and len(prev_word_unannotated) > 0 and reg_exp_alphanum.match(prev_word_unannotated[len(prev_word_unannotated)-1]):
             annotated_word+="C"
         annotated_word += ":"
-        if original_annotated_word.isupper():
+        if features['all_upper'] and original_annotated_word.isupper():
             annotated_word+="U"
         annotated_word += ":"
-        if not wn.synsets(original_annotated_word):
+        if features['foreign'] and not wn.synsets(original_annotated_word):
             annotated_word+="F"
         annotated_word += ":"    
-#         sum_t = sum(1 for x in keywords.values() if(word == x))
-#         print str(word) + " " + str(sum_t)
-#         if sum_t == 1:
-        if words.count(original_annotated_word) == 1:
-            annotated_word+="UN"
+
+        if features['unique'] and word in counts:
+            if counts[word] == 1:
+                annotated_word+="UN"
         annotated_words.append(annotated_word)
         prev_word = original_annotated_word
         prev_word_unannotated = word
 
         
-#     tokenized_words = nltk.tokenize.word_tokenize(words)
-#     print 'tokenized iteration: '+ str(current_example.counter)
-#     current_example.counter += 1
-#     tagged_words = nltk.pos_tag(tokenized_words)
-#     tagged_line = ""
-#     for word, tag in tagged_words:
-#         tagged_line += (word + ":" +tag + " ")
-#     return tagged_line
-#     return ""
     tagged = " ".join(annotated_words)
+#     question_features[question_id] = tagged
 #     print tagged
     return tagged
 
+
+def get_example_features(features, question, user, default=False):
+    
+    question_features = get_question_features(features, question)
+    user_features = get_user_features(features, user)
+    if default:
+        feature_list = []
+        question_feature_list = question_features.split()
+        for feature in question_feature_list:
+            individual_features = feature.split(":")
+            for current_individual_feature in individual_features:
+                feature_list.append(current_individual_feature)
+        user_features_list = user_features.split()
+        for feature in user_features_list:
+            individual_features = feature.split(":")
+            for current_individual_feature in individual_features:
+                feature_list.append(current_individual_feature)
+        feature_string = " ".join(feature_list)
+    else:
+        feature_string = user_features +"|"+question_features
+    return feature_string
+
+
 def stringToInt(s):
     return int(float(s))
+
 
 def rootMeanSquaredError(examples):
     predictions = [x.prediction for x in examples]
     observations = [x.observation for x in examples]
     return mean_squared_error(predictions, observations) ** 0.5
 
-def producePredictions(trainingExamples, testExamples):
-    analyzer = Analyzer(word=True, speech=False, capital=True, all_upper=True, foreign=True, dictionary=[], use_dictionary=False, unique=False, ngram_range=(1,1))
-    featurizer = Featurizer(use_default=True, analyzer=analyzer)
-    x_train = featurizer.train_feature(trainingExamples)
-    x_test = featurizer.test_feature(testExamples)
+
+def producePredictions(trainingExamples, testExamples, users):
+    features = {'word':False, 'speech':True, 'capital':True, 'all_upper':False, 'foreign':True, 
+                'dictionary':[], 'use_dictionary':False, 'unique':False, 'ngram_range':(2,10), 'user_average':True}
+    analyzer = Analyzer(features=features)
+    featurizer = Featurizer(features, use_default=False, analyzer=analyzer)
+#     featurizer = Featurizer(use_default=True)
     y_train = []
     for train_example in trainingExamples:
         y_train.append(train_example.observation)
+    print "Generating training x"
+    x_train = featurizer.train_feature(trainingExamples, users)
+    print featurizer.vectorizer.vocabulary_.get('document')
+    print x_train.toarray()[0]
+    print x_train.toarray()[1]
+    print x_train.toarray()[4000]
+    del trainingExamples
+    print "Generating test x"
+    x_test = featurizer.test_feature(testExamples, users)
     
-#     lr = SGDClassifier(loss='log', penalty='l2', shuffle=True)
+    
+#     classifier = SGDClassifier(loss='log', penalty='l2', shuffle=True)
 #     
 #     lr.fit(x_train, y_train)
 
-    linreg = linear_model.LinearRegression()  
-    linreg.fit(x_train, y_train)  
+    classifier = linear_model.LinearRegression()
+    
+    print "Fitting classifier"  
+    classifier.fit(x_train, y_train)  
     
     print "\nFit training data"
     
-#     predictions = lr.predict(x_test)
-    predictions = linreg.predict(x_test)
+    predictions = classifier.predict(x_test)
     
     for i in range(len(predictions)):
         testExamples[i].prediction = predictions[i]
     
     return predictions
-#     # Calculate mean and standard deviation of training examples
-#     averageTime = np.mean([x.observation for x in trainingSet])
-#     stdDev = np.std([x.observation for x in trainingSet])
-# 
-#     # Produce predictions
-#     for current_example in testSet:
-#         current_example.prediction = averageTime
+
+
+def create_example_from_csv(row, questions, test=False):
+    current_example = Example()
+    current_example.id = row['id']
+    q_id = int(row['question'])
+    current_example.question = questions[q_id]
+    current_example.user = int(row['user'])
+    
+    if not test:
+        current_example.observation = stringToInt(row['position'])
+        position = float(row['position'])
+    else:
+        position = 0
+
+    u_id = int(row['user'])
+    if u_id not in users:
+        current_user = User(u_id)
+        users[u_id] = current_user
+        
+    else:
+        current_user = users[u_id]
+        
+    if not test: 
+        if position > 0:
+            correct = True
+        else:
+            correct = False
+        answer = row['answer']
+        current_user.add_question(q_id, correct, position, answer)
+        
+        current_example.answer = answer
+    return current_example
+
+
 
 if __name__ == "__main__":
     nltk.download('wordnet')
@@ -266,50 +439,46 @@ if __name__ == "__main__":
                            action='store_true', default=False, required=False)
     args = argparser.parse_args()
     
-    questionFile = "questions.csv"
+    questionFile = "questions_processed.csv"
     fin = open(questionFile, 'rt')
-    reader = csv.DictReader(fin, ['id', 'answer', 'type', 'category', 'question', 'keywords'])
+    reader = csv.DictReader(fin)#, ['id', 'answer', 'type', 'category', 'question', 'keywords'])
     questions = dict()
     for row in reader:
         key_dict = eval(row['keywords'])
-#         for key in key_dict:
-#             print key_dict[key]
-        question = Question(row['question'], row['category'], key_dict, row['answer'], row['type'], row['id'])
+        question_list = eval(row['question'])
+        question = Question(question_list, row['category'], key_dict, row['answer'], row['type'], row['id'])
         questions[int(row['id'])] = question
     fin.close()
-    
+    users = {}
     # Read training examples
     trainingFile = "train.csv"
     fin = open(trainingFile, 'rt')
     reader = csv.DictReader(fin)
     examples = []
     for row in reader:
-        current_example = Example()
-        current_example.id = row['id']
-        current_example.question = questions[int(row['question'])]
-        current_example.user = row['user']
-        current_example.observation = stringToInt(row['position'])
-        current_example.answer = row['answer']
+        current_example = create_example_from_csv(row, questions)
         examples.append(current_example)
     fin.close()
     
     print "\nRead data"
     
-    #    current_example.observation = (current_example.observation - mean)/dev
-
     # Define cross-validation parameters
+    limit = args.limit
+    
     if args.local:
         nTrainingSets = args.local_selection
         trainingExamples = []
         testExamples = []
         
         for i in range(len(examples)):
+            if limit > 0 and i >= limit:
+                break
             if i%nTrainingSets == 0:
                 testExamples.append(examples[i])
             else:
                 trainingExamples.append(examples[i])
                 
-        predictions = producePredictions(trainingExamples, testExamples) 
+        predictions = producePredictions(trainingExamples, testExamples, users) 
         
         
         print "\nFinished prediction"
@@ -318,32 +487,12 @@ if __name__ == "__main__":
             predict_y = predictions[i]
             test_example = testExamples[i]
             test_example.prediction = predict_y
-        #     boundaryIndices = [int(x) for x in np.linspace(0, len(examples)-1, nTrainingSets+1)]
-        #     trainingSets = []
-        #     for i in range(len(boundaryIndices)-1):
-        #         set_i = examples[boundaryIndices[i] : boundaryIndices[i+1]]
-        #         trainingSets.append(set_i)
-        
-        # Perform cross validation on training examples 
-        #     errors = []
-        #     for i in range(nTrainingSets):
-        #         # Partition training examples into train and validation sets
-        #         trainingExamples = []
-        #         verificationExamples = trainingSets[i]
-        #         for j in range(nTrainingSets):
-        #             if j != i:
-        #                 trainingExamples = trainingExamples + trainingSets[j]
-        # 
-        #         # Generate predictions
-        #         producePredictions(trainingExamples, verificationExamples)
-        # 
-        #         # Calculate root-mean-square deviation
+
+        # Calculate root-mean-square deviation
         err = rootMeanSquaredError(testExamples)
-        #         errors.append(err)
         
         print "CROSS-VALIDATION RESULTS"
         print "ERROR: ", err#np.mean(errors)
-        #print "min median max:   ", min(errors), "  ", np.median(errors), "  ", max(errors)
 
     if args.predict:
         # Read test file
@@ -353,15 +502,12 @@ if __name__ == "__main__":
         reader = csv.DictReader(fin)
         testExamples = []
         for row in reader:
-            current_example = Example()
-            current_example.id = row['id']
-            current_example.question = questions[int(row['question'])]
-            current_example.user = row['user']
+            current_example = create_example_from_csv(row, questions, test=True)
             testExamples.append(current_example)
         fin.close()
      
         # Generate predictions
-        producePredictions(examples, testExamples)
+        producePredictions(examples, testExamples, users)
      
         # Produce submission file
         submissionFile = "submission.csv"
