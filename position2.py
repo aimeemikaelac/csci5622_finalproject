@@ -256,7 +256,7 @@ if __name__ == "__main__":
         # Train a classifier
         # print("Training classifier ...")
         # classifier = nltk.classify.NaiveBayesClassifier.train(dev_train)
-        classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=0, max_iter=20)
+        classifier = nltk.classify.MaxentClassifier.train(dev_train, 'IIS', trace=0, max_iter=20)
 
         # classifier2.show_most_informative_features(20)
 

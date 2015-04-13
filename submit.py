@@ -147,7 +147,7 @@ if __name__ == "__main__":
         # position answers[id] = position...
         position_answers[ii[1]] = classifier.classify(ii[0])
         # print position_answers[ii[1]]
-    print "Length first full test = ", len(full_test)
+    # print "Length first full test = ", len(full_test)
 
 ####################################################
 ## Correctness Section #############################
@@ -204,7 +204,7 @@ if __name__ == "__main__":
         # Train a classifier
         # print("Training classifier ...")
         # classifier = nltk.classify.NaiveBayesClassifier.train(dev_train)
-        classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=0, max_iter=20)
+        classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=0, max_iter=4)
 
        
     #make a list of all users in test set
@@ -285,7 +285,7 @@ if __name__ == "__main__":
         #sign_answers[id] = answer
         sign_answers[ii[1]] = classifier.classify(ii[0])
         # print sign_answers[ii[1]]
-    print "Length second full test = ", len(full_test)
+    # print "Length second full test = ", len(full_test)
 
     final_answers = {}
     for ii in sign_answers:
@@ -294,10 +294,10 @@ if __name__ == "__main__":
 
 
     # Write predictions
-    o = DictWriter(open('pred.csv', 'w'), ['id', 'pred'])
+    o = DictWriter(open('pred.csv', 'w'), ['id', 'position'])
     o.writeheader()
     for ii in final_answers:
-        o.writerow({'id': ii, 'pred': final_answers[ii]})
+        o.writerow({'id': ii, 'position': final_answers[ii]})
 
     classifier = nltk.classify.NaiveBayesClassifier.train(dev_train + dev_test)
     classifier.show_most_informative_features(20)
