@@ -145,7 +145,7 @@ if __name__ == "__main__":
         counter += 1
 
     rms = mean_squared_error(predictions, aa) ** 0.5
-    print "RMS Accuracy Position Only = ", rms
+    # print "RMS Accuracy Position Only = ", rms
 
     # # Write predictions
     # o = DictWriter(open('pred.csv', 'w'), ['id', 'pred'])
