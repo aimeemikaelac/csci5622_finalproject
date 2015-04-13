@@ -71,6 +71,8 @@ if __name__ == "__main__":
     final_answers = {}
 
     alldata = {}
+    alldata_q = {}
+    alldata_one = {}
 
     for ii in train:
 
@@ -88,10 +90,16 @@ if __name__ == "__main__":
 
         ##usually not useful
         # d['category1'] = question_data[int(ii['question'])][1]
-
-        alldata[int(ii['user'])] = [d['userpos1'], d['qpos1'], d['diff'], d['qpercent'], d['upercent'], d['category1'], ii['QuestAnswered']]
         # d['qans'] = int(float(ii['QuestAnswered']))
         # d['wikilen1'] = int(question_data[int(ii['question'])][4])
+
+        if int(ii['QuestAnswered'])<2:
+            alldata_one[int(ii['user'])] = [d['userpos1'], d['qpos1'], d['diff'], d['qpercent'], d['upercent'], d['category1'], ii['QuestAnswered']]
+            # print alldata_one[int(ii['user'])]
+
+        alldata[int(ii['user'])] = [d['userpos1'], d['qpos1'], d['diff'], d['qpercent'], d['upercent'], d['category1'], ii['QuestAnswered']]
+        alldata_q[int(ii['question'])] = [d['qpos1'], d['qpercent']]
+        
 
 
         dev_train.append((d, myround(abs(int(float(ii['position']))), 5)))
@@ -104,19 +112,28 @@ if __name__ == "__main__":
     one_q_user_qper = []
     one_q_user_uper = []
     
+    for user in alldata_one:
+        one_q_user_pos.append(int(float(alldata_one[user][0])))
+        one_q_user_qpos.append(int(float(alldata_one[user][1])))
+        one_q_user_diff.append(int(float(alldata_one[user][2])))
+        one_q_user_qper.append(float(alldata_one[user][3]))
+        one_q_user_uper.append(float(alldata_one[user][4]))
 
-    for user in alldata:
-        one_q_user_pos.append(int(float(alldata[user][0])))
-        one_q_user_qpos.append(int(float(alldata[user][1])))
-        one_q_user_diff.append(int(float(alldata[user][2])))
-        one_q_user_qper.append(float(alldata[user][3]))
-        one_q_user_uper.append(float(alldata[user][4]))
-
-    one_q_user_pos = np.mean(one_q_user_pos)
+    one_q_user_pos = int(np.mean(one_q_user_pos))
     one_q_user_uper = np.mean(one_q_user_uper)
     one_q_user_qper = np.mean(one_q_user_qper)
-    one_q_user_qpos = np.mean(one_q_user_qpos)
-    one_q_user_diff = np.mean(one_q_user_diff)
+    one_q_user_qpos = int(np.mean(one_q_user_qpos))
+    one_q_user_diff = int(np.mean(one_q_user_diff))
+
+    one_q_per = []
+    one_q_pos = []
+
+    for quest in alldata_q:
+        one_q_per.append(float(alldata_q[quest][1]))
+        one_q_pos.append(int(float(alldata_q[quest][0])))
+
+    one_q_per = np.mean(one_q_per)
+    one_q_pos = int(np.mean(one_q_pos))
         
 
 
@@ -269,12 +286,18 @@ if __name__ == "__main__":
 
             if int(ii['user']) in test_users_dict[user]:
                 try:
-                    d['qpercent'] = alldata[int(ii['user'])][3]
+                    # d['qpercent'] = alldata[int(ii['user'])][3]
                     d['upercent'] = alldata[int(ii['user'])][4]
                 #never seen before user
                 except KeyError:
-                    d['qpercent'] = one_q_user_qper
+                    # d['qpercent'] = one_q_user_qper
                     d['upercent'] = one_q_user_uper
+
+                try :
+                    d['qpercent'] = alldata_q[int(ii['question'])][1]
+                except KeyError:
+                    d['qpercent'] = one_q_per
+
                 full_test.append((d, int(ii['id'])))
 
             
@@ -300,4 +323,4 @@ if __name__ == "__main__":
         o.writerow({'id': ii, 'position': final_answers[ii]})
 
     classifier = nltk.classify.NaiveBayesClassifier.train(dev_train + dev_test)
-    classifier.show_most_informative_features(20)
+    # classifier.show_most_informative_features(20)
