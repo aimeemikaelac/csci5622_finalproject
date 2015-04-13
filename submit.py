@@ -122,8 +122,8 @@ if __name__ == "__main__":
 
     # Train a classifier
     print("Training position classifier ...")
-    classifier = nltk.classify.NaiveBayesClassifier.train(dev_train)
-    # classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=3, max_iter=5)
+    # classifier = nltk.classify.NaiveBayesClassifier.train(dev_train)
+    classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=3, max_iter=5)
 
 
     full_test = []
