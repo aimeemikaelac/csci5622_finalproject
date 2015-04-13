@@ -38,13 +38,7 @@ if __name__ == "__main__":
                         help='subsample this amount')
     args = parser.parse_args()
     
-    # questions = {}
-    # with open('questions.csv') as q:
-    #     for ii in q:
-    #         print ii
-    #         # jj = ii.split('\n')
-    #         # print jj[0]
-    # q.close()
+
 
     question_data = {}
     questions = DictReader(open("questions.csv"),'r')
@@ -61,107 +55,7 @@ if __name__ == "__main__":
                                         ii[None][3], ii[None][4],
                                          ii[None][5]]
 
-    # datamap = ast.literal_eval(question_data[1][2])
-            # print question_data[1][3]
 
-            # datamap = eval(question_data[1][3])
-
-            # if isinstance(datamap, dict):
-            #     print 'HI!'
-            #     print datamap[1]
-            # else:
-            #     print 'NOPE!', datamap
-    ###question_data[id][0]=answer, [id][1]=caegory
-    ### [id][2]=question, [id][3]=question(no stopwords)
-    ### [id][4]=wikilength
-
-    # Read in training data
-    train = DictReader(open("train3.csv", 'r'))
-    
-    # Split off dev section 80/20
-    dev_train = []
-    dev_test = []
-    answers = []
-    qids = []
-    position_answers = {}
-    final_answers = {}
-
-
-
-    for ii in train:
-        #Feature dictionary
-        d = defaultdict(int)
-        # d['Qid'] = ii['question']
-        # d['user1'] = int(float(ii['user']))
-        d['userpos1'] = abs(int(float(ii['AvgUserPos'])))
-        d['qpos1'] = abs(int(float(ii['AvgQuestPos'])))
-        d['diff'] = abs(int(float(ii['AvgQuestPos']))) - abs(int(float(ii['AvgUserPos'])))
-               
-        # d['qpercent'] = myround(float(ii['QuestPercent'])*100, 25)
-        d['upercent'] = myround(float(ii['UserPercent'])*100, 25)
-
-        ##usually not useful
-        d['category1'] = question_data[int(ii['question'])][1]
-        # d['qans'] = int(float(ii['QuestAnswered']))
-        # d['wikilen1'] = int(question_data[int(ii['question'])][4])
-        # d['answer_length'] = len(ii['answer'].split(' '))
-
-
-        #todo: try word/proper nouns before AvgQuest/UserPos
-
-        if int(ii['id']) % 5 == 0:
-            ### Positive only
-            dev_test.append((d, abs(int(float(ii['position'])))))
-            final_answers[int(ii['id'])] = int(float(ii['position']))
-            qids.append(int(ii['id']))
-            answers.append(abs(int(float(ii['position']))))             
-            ### With negatives
-            # dev_test.append((d, int(float(ii['position']))))
-
-        else:
-            ### Positive only
-            # dev_train.append((d, abs(int(float(ii['position'])))))
-            # dev_train.append((d, abs(int(float(ii['RoundPos'])))))
-            dev_train.append((d, myround(abs(int(float(ii['position']))), 5)))
-            #### With negatives
-            # dev_train.append((d, int(float(ii['RoundPos']))))
-
-
-
-    # Train a classifier
-    print("Training classifier ...")
-    classifier = nltk.classify.NaiveBayesClassifier.train(dev_train)
-    # classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=3, max_iter=5)
-
-    predictions = []
-    aa = []
-    counter = 0
-
-    for ii in dev_test:
-        # print classifier.classify(ii[0])
-        predictions.append(classifier.classify(ii[0]))
-        position_answers[qids[counter]] = answers[counter]
-        aa.append(ii[1])
-        counter += 1
-
-    rms = mean_squared_error(predictions, aa) ** 0.5
-    print "RMS Accuracy Position Only = ", rms
-
-    # # Write predictions
-    # o = DictWriter(open('pred.csv', 'w'), ['id', 'pred'])
-    # o.writeheader()
-    # for ii in sorted(test):
-    #     o.writerow({'id': ii, 'pred': test[ii]})
-
-    # classifier = nltk.classify.NaiveBayesClassifier.train(dev_train + dev_test)
-    # classifier.show_most_informative_features(20)
-
-####################################################
-## Correctness Section #############################
-####################################################
-
-
-    
     # Try running on per user basis
     # Group users with <30 questions answered together
     user_dict = {}
@@ -204,7 +98,7 @@ if __name__ == "__main__":
     overall_total = 0
     overall_correct = 0
     qans = 0
-    sign_answers = {}
+    
 
 
     for user in user_dict:    
@@ -215,7 +109,7 @@ if __name__ == "__main__":
         dev_test = []
         answers = []
         qids = []
-        
+
 
         for ii in train:
 
@@ -245,8 +139,7 @@ if __name__ == "__main__":
                 if int(ii['id']) % 5 == 0:
                     dev_test.append((d, sign(float(ii['position']))))
                     answers.append(float(ii['position']))
-                    qids.append(int(ii['id']))
-
+                    qids.append(int(ii['question']))
 
                 else:
                     dev_train.append((d, sign(float(ii['position']))))
@@ -256,10 +149,11 @@ if __name__ == "__main__":
         # Train a classifier
         # print("Training classifier ...")
         # classifier = nltk.classify.NaiveBayesClassifier.train(dev_train)
-        classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=0, max_iter=20)
+        classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=0, max_iter=4)
 
         # classifier2.show_most_informative_features(20)
 
+        predictions_sign = []
         correct = 0
         total = 0
 
@@ -267,29 +161,37 @@ if __name__ == "__main__":
         for ii in dev_test:
             # print classifier.classify(ii[0])
             ans = classifier.classify(ii[0])
-            sign_answers[qids[total]]=sign(ans)
             total+=1
             overall_total+=1
-            # question_stats[qids[total-1]][1]+=1
+            question_stats[qids[total-1]][1]+=1
             if sign(ans) == sign(answers[total-1]):
                 correct+=1
                 overall_correct+=1
-                # question_stats[qids[total-1]][0]+=1
+                question_stats[qids[total-1]][0]+=1
 
 
+            # predictions_sign.append(1.0)
 
-    
+        # for ii in range(0,len(predictions_sign)):
+        #     total+=1
+        #     overall_total+=1
+        #     if sign(predictions_sign[ii]) == sign(answers[ii]):
+        #         correct+=1
+        #         overall_correct+=1
 
-    predictions = []
-    answers = []
-    for ii in final_answers:
-        answers.append(final_answers[ii])
-        # print position_answers[ii]
-        # print sign_answers[ii]
+        user_stats[user] = [round(float(correct)/total, 2), qans]
+        # try:
+        # print "Accuracy = ", round(float(correct)/total, 2), "User(s) = ", user
+        # except ZeroDivisionError:
+            # print "No questions in test? ", correct, total 
 
-        predictions.append(sign_answers[ii]*position_answers[ii])
-        # print sign_answers[ii]*position_answers[ii], final_answers[ii]
-    
+
+    for user in user_stats:
+        if user_stats[user][0]<=1:
+            print user, user_stats[user]
+
     print "Final Accuracy = ", float(overall_correct)/overall_total
-    rms = mean_squared_error(predictions, answers) ** 0.5
-    print "RMS Accuracy = ", rms
+
+    # print '## Question Data ##'
+    # for qq in question_stats:
+    #     print qq, round(question_stats[qq][0]/(question_stats[qq][1]+0.001,1)
