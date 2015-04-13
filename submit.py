@@ -65,15 +65,22 @@ if __name__ == "__main__":
     # Split off dev section 80/20
     dev_train = []
     dev_test = []
-    answers = []
-    qids = []
     position_answers = {}
     final_answers = {}
 
     alldata = {}
-    alldata_q = {}
-    alldata_one = {}
+    data_q = {}
+    data_one = {}
+    train_users = set()
 
+    for ii in train:
+        if int(ii['QuestAnswered'])<2:
+            data_one[int(ii['user'])] = []
+        alldata[int(ii['user'])] = []
+        data_q[int(ii['question'])] = []
+        train_users.add(int(ii['user']))
+
+    train = DictReader(open("train3.csv", 'r'))
     for ii in train:
 
 
@@ -86,38 +93,45 @@ if __name__ == "__main__":
         d['diff'] = abs(int(float(ii['AvgQuestPos']))) - abs(int(float(ii['AvgUserPos'])))
                
         # d['qpercent'] = myround(float(ii['QuestPercent'])*100, 25)
-        d['upercent'] = myround(float(ii['UserPercent'])*100, 25)
+        # d['upercent'] = myround(float(ii['UserPercent'])*100, 25)
+        qper = myround(float(ii['QuestPercent'])*100, 25)
+        uper = myround(float(ii['UserPercent'])*100, 25)
 
         ##usually not useful
-        # d['category1'] = question_data[int(ii['question'])][1]
+        d['category1'] = question_data[int(ii['question'])][1]
         # d['qans'] = int(float(ii['QuestAnswered']))
         # d['wikilen1'] = int(question_data[int(ii['question'])][4])
 
         if int(ii['QuestAnswered'])<2:
-            alldata_one[int(ii['user'])] = [d['userpos1'], d['qpos1'], d['diff'], d['qpercent'], d['upercent'], d['category1'], ii['QuestAnswered']]
-            # print alldata_one[int(ii['user'])]
+            data_one[int(ii['user'])].append([d['userpos1'], d['qpos1'], d['diff'], qper, uper, d['category1'], ii['QuestAnswered']])
+            # print data_one[int(ii['user'])]
 
-        alldata[int(ii['user'])] = [d['userpos1'], d['qpos1'], d['diff'], d['qpercent'], d['upercent'], d['category1'], ii['QuestAnswered']]
-        alldata_q[int(ii['question'])] = [d['qpos1'], d['qpercent']]
+        alldata[int(ii['user'])].append([d['userpos1'], d['qpos1'], d['diff'], qper, uper, d['category1'], ii['QuestAnswered']])
+        data_q[int(ii['question'])].append([d['qpos1'], qper])
         
 
 
         dev_train.append((d, myround(abs(int(float(ii['position']))), 5)))
 
 
-    #Make stats in case a user or question doesn't exist:
+    # for never seen user    
     one_q_user_pos = []
     one_q_user_qpos = []
     one_q_user_diff = []
     one_q_user_qper = []
     one_q_user_uper = []
     
-    for user in alldata_one:
-        one_q_user_pos.append(int(float(alldata_one[user][0])))
-        one_q_user_qpos.append(int(float(alldata_one[user][1])))
-        one_q_user_diff.append(int(float(alldata_one[user][2])))
-        one_q_user_qper.append(float(alldata_one[user][3]))
-        one_q_user_uper.append(float(alldata_one[user][4]))
+    for user in data_one:
+        # print "dat[user] = ,", data_one[user]
+        for row in data_one[user]:
+            # print "user, ROW = ", user,row
+            one_q_user_pos.append(int(float(row[0])))
+            one_q_user_qpos.append(int(float(row[1])))
+            one_q_user_diff.append(int(float(row[2])))
+            one_q_user_qper.append(float(row[3]))
+            one_q_user_uper.append(float(row[4]))
+
+    # print one_q_user_uper
 
     one_q_user_pos = int(np.mean(one_q_user_pos))
     one_q_user_uper = np.mean(one_q_user_uper)
@@ -128,36 +142,52 @@ if __name__ == "__main__":
     one_q_per = []
     one_q_pos = []
 
-    for quest in alldata_q:
-        one_q_per.append(float(alldata_q[quest][1]))
-        one_q_pos.append(int(float(alldata_q[quest][0])))
+    ## for never seen questions
+    for quest in data_q:
+        for row in data_q[quest]:
+            one_q_per.append(float(row[1]))
+            one_q_pos.append(int(float(row[0])))
 
     one_q_per = np.mean(one_q_per)
     one_q_pos = int(np.mean(one_q_pos))
-        
+    
+    print one_q_per
+    print one_q_pos
+
+    print one_q_user_uper
+    print one_q_user_pos
 
 
     # Train a classifier
     print("Training position classifier ...")
-    # classifier = nltk.classify.NaiveBayesClassifier.train(dev_train)
-    classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=3, max_iter=5)
+    classifier = nltk.classify.NaiveBayesClassifier.train(dev_train)
+    # classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=3, max_iter=5)
 
 
     full_test = []
+    PQKeyError = 0
+    PUKeyError = 0
 
     test = DictReader(open("test.csv", 'r'))
     for ii in test:
         d = defaultdict(int)
+        #ave user pos, ave quest pos, diff, aver
         try:
-            d['userpos1'] = alldata[int(ii['user'])][0]
-            d['qpos1'] = alldata[int(ii['user'])][1]
-            d['diff'] = alldata[int(ii['user'])][2]
-            d['upercent'] = alldata[int(ii['user'])][4]
+            d['userpos1'] = alldata[int(ii['user'])][0][0]
         except KeyError:
+            PUKeyError += 1
             d['userpos1'] = one_q_user_qpos
-            d['qpos1'] = one_q_user_qpos
+
+        try:
+            # print alldata[int(ii['user'])][0][0]
+            d['qpos1'] = data_q[int(ii['question'])][0][0]
+            d['diff'] = alldata[int(ii['user'])][0][0] - data_q[int(ii['question'])][0][0]
+            # d['upercent'] = alldata[int(ii['user'])][4]
+        except KeyError:
+            PQKeyError += 1
+            d['qpos1'] = one_q_pos
             d['diff'] = one_q_user_diff
-            d['upercent'] = one_q_user_uper
+            # d['upercent'] = one_q_user_uper
         full_test.append((d, int(ii['id'])))
 
     for ii in full_test:
@@ -220,88 +250,68 @@ if __name__ == "__main__":
 
         # Train a classifier
         # print("Training classifier ...")
-        # classifier = nltk.classify.NaiveBayesClassifier.train(dev_train)
-        classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=0, max_iter=4)
+        classifier = nltk.classify.NaiveBayesClassifier.train(dev_train)
+        # classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=0, max_iter=4)
 
-       
-    #make a list of all users in test set
-    test_users_dict = {}
-    # test_users_dict = {}
-    test_users_dict['bin1'] = set()
-    test_users_dict['bin2'] = set()
-    test_users_dict['bin3'] = set()
-    test_users_dict['bin4'] = set()
-    test_users_dict['bin5'] = set()
-    test_users_dict['bin6'] = set()
-    test_users_dict['bin7'] = set()
-    # test_users_list = []
-    test = DictReader(open("test.csv", 'r'))
-    for ii in test:
-        # test_users_list.append(int(ii['user']))
-        try:
-            # print int(alldata[int(ii['user'])][6])
-            qanswered = int(alldata[int(ii['user'])][6])
-            if qanswered<=5:
-                test_users_dict['bin1'].add(int(ii['user']))
-            elif qanswered>5 and qanswered<=15:
-                test_users_dict['bin2'].add(int(ii['user']))
-            elif qanswered>15 and qanswered<=30:
-                test_users_dict['bin3'].add(int(ii['user']))
-            elif qanswered>30 and qanswered<=60:
-                test_users_dict['bin4'].add(int(ii['user']))
-            elif qanswered>60 and qanswered<=100:
-                test_users_dict['bin5'].add(int(ii['user']))
-            elif qanswered>100 and qanswered<=200:
-                test_users_dict['bin6'].add(int(ii['user']))
-            elif qanswered>200 and qanswered<=300:
-                test_users_dict['bin7'].add(int(ii['user']))
-            else:
-                test_users_dict[str(ii['user'])] = []
-                test_users_dict[str(ii['user'])].append(int(ii['user']))
-        #never before seen user
-        except KeyError:
-            test_users_dict['bin1'].add(int(ii['user']))
-            # pass
-
-    # print test_users_dict['bin1']
-    # print test_users_dict['bin2']
-    # print test_users_dict['bin3']
-    # print test_users_dict['bin4']
-    # print test_users_dict['bin5']
-    # print test_users_dict['bin6']
-    # print test_users_dict['bin7']
 
     sign_answers = {}
     full_test = []
+    UserKeyError = 0 #number unseen users
+    QKeyError = 0 #number unseen questions
+
+    test_users = set()
+    test = DictReader(open("test.csv", 'r'))
+    for ii in test:
+        test_users.add(int(ii['user']))
+
+    unseen_users = test_users - train_users
 
 
-    for user in test_users_dict:    
+    #for user group:
+        #for every id
+            # if user in bin: d[qper]...
+
+    for user in user_dict:    
         test = DictReader(open("test.csv", 'r'))
         counter = 0
         for ii in test:
             counter +=1
             #Feature dictionary
             d = defaultdict(int)
-            #user seen in training
-
-            if int(ii['user']) in test_users_dict[user]:
-                try:
-                    # d['qpercent'] = alldata[int(ii['user'])][3]
-                    d['upercent'] = alldata[int(ii['user'])][4]
-                #never seen before user
-                except KeyError:
-                    # d['qpercent'] = one_q_user_qper
+            
+            #Users not seen in training go in bin1
+            if int(ii['user']) in unseen_users:
+                if user == 'bin1':
+                    UserKeyError += 1
                     d['upercent'] = one_q_user_uper
-
+                    try :
+                        d['qpercent'] = data_q[int(ii['question'])][0][1]
+                    except KeyError:
+                        d['qpercent'] = one_q_per
+                        QKeyError += 1
+                    full_test.append((d, int(ii['id'])))
+            #Users seen in training
+            elif int(ii['user']) in user_dict[user]:
+                d['upercent'] = alldata[int(ii['user'])][0][4]
                 try :
-                    d['qpercent'] = alldata_q[int(ii['question'])][1]
+                    d['qpercent'] = data_q[int(ii['question'])][0][1]
                 except KeyError:
                     d['qpercent'] = one_q_per
-
+                    QKeyError += 1
                 full_test.append((d, int(ii['id'])))
+            # elif int(ii['user']) in test_users:
+            #     UserKeyError += 1
+            #     d['upercent'] = one_q_user_uper
+            #     try :
+            #         d['qpercent'] = data_q[int(ii['question'])][0][1]
+            #     except KeyError:
+            #         d['qpercent'] = one_q_per
+            #         QKeyError += 1
+            #     full_test.append((d, int(ii['id'])))
 
             
         # print counter
+
 
     #classify position
     for ii in full_test:
@@ -315,9 +325,14 @@ if __name__ == "__main__":
         final_answers[ii] = sign_answers[ii]*position_answers[ii]
         print final_answers[ii], sign_answers[ii], position_answers[ii]
 
+    print "PQKeyError = ", PQKeyError
+    print "PUKeyError = ", PUKeyError
+    print "QKeyError = ", QKeyError
+    print "UserKeyError = ", UserKeyError
+
 
     # Write predictions
-    o = DictWriter(open('pred.csv', 'w'), ['id', 'position'])
+    o = DictWriter(open('pred2.csv', 'w'), ['id', 'position'])
     o.writeheader()
     for ii in final_answers:
         o.writerow({'id': ii, 'position': final_answers[ii]})

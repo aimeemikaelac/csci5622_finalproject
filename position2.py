@@ -81,8 +81,6 @@ if __name__ == "__main__":
     # Split off dev section 80/20
     dev_train = []
     dev_test = []
-    answers = []
-    qids = []
     position_answers = {}
     final_answers = {}
 
@@ -98,7 +96,7 @@ if __name__ == "__main__":
         d['diff'] = abs(int(float(ii['AvgQuestPos']))) - abs(int(float(ii['AvgUserPos'])))
                
         # d['qpercent'] = myround(float(ii['QuestPercent'])*100, 25)
-        d['upercent'] = myround(float(ii['UserPercent'])*100, 25)
+        # d['upercent'] = myround(float(ii['UserPercent'])*100, 25)
 
         ##usually not useful
         d['category1'] = question_data[int(ii['question'])][1]
@@ -111,10 +109,8 @@ if __name__ == "__main__":
 
         if int(ii['id']) % 5 == 0:
             ### Positive only
-            dev_test.append((d, abs(int(float(ii['position'])))))
+            dev_test.append((d, abs(int(float(ii['position']))), int(ii['id'])))
             final_answers[int(ii['id'])] = int(float(ii['position']))
-            qids.append(int(ii['id']))
-            answers.append(abs(int(float(ii['position']))))             
             ### With negatives
             # dev_test.append((d, int(float(ii['position']))))
 
@@ -131,21 +127,21 @@ if __name__ == "__main__":
     # Train a classifier
     print("Training classifier ...")
     classifier = nltk.classify.NaiveBayesClassifier.train(dev_train)
-    # classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=3, max_iter=5)
+    # classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=3, max_iter=1)
 
     predictions = []
-    aa = []
-    counter = 0
+    answers = []
 
     for ii in dev_test:
         # print classifier.classify(ii[0])
-        predictions.append(classifier.classify(ii[0]))
-        position_answers[qids[counter]] = answers[counter]
-        aa.append(ii[1])
-        counter += 1
+        pred = classifier.classify(ii[0])
+        predictions.append(pred)
+        # predictions.append(ii[0]['qpos1'])
+        position_answers[ii[2]] = pred
+        answers.append(ii[1])
 
-    rms = mean_squared_error(predictions, aa) ** 0.5
-    # print "RMS Accuracy Position Only = ", rms
+    rms = mean_squared_error(predictions, answers) ** 0.5
+    print "RMS Accuracy Position Only = ", rms
 
     # # Write predictions
     # o = DictWriter(open('pred.csv', 'w'), ['id', 'pred'])
@@ -290,6 +286,6 @@ if __name__ == "__main__":
         predictions.append(sign_answers[ii]*position_answers[ii])
         # print sign_answers[ii]*position_answers[ii], final_answers[ii]
     
-    print "Final Accuracy = ", float(overall_correct)/overall_total
+    print "Accuracy = ", float(overall_correct)/overall_total
     rms = mean_squared_error(predictions, answers) ** 0.5
     print "RMS Accuracy = ", rms
