@@ -9,13 +9,14 @@ from distlib.util import CSVWriter
 from math import ceil
 import nltk
 from nltk.corpus import wordnet as wn
+from numpy import sign
 import numpy
 import os
 import pickle
 import re
 from scipy.sparse.csgraph._min_spanning_tree import csr_matrix
 from sets import Set
-from sklearn import linear_model
+from sklearn import linear_model, svm, neural_network, ensemble
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.linear_model.stochastic_gradient import SGDClassifier
 from sklearn.metrics import mean_squared_error
@@ -31,26 +32,12 @@ VALID_POS = ['FW', 'JJ', 'JJR', 'JJS', 'MD', 'NN', 'NNS',
              'RP', 'VB', 'VBD', 'VBG', 'VBN', 'VBP', 'VBZ',
              'WDT', 'WRB']
 
-# question_features = {}
-# user_features = {}
-# answer_wiki_features = {}
-
 class Analyzer:
-    def __init__(self, features):#word=False, speech=False, capital=False, all_upper=False, foreign=False, 
-#                  unique=False, dictionary=dict(), use_dictionary=False, ngram_range=(1,1), user_average=False):
-#         self.word = word
-#         self.speech = speech
-#         self.capital = capital
-#         self.ngram_range = ngram_range
-#         self.all_upper = all_upper
-#         self.foreign = foreign
-#         self.dictionary = dictionary
-#         self.use_dictionary = use_dictionary
-#         self.unique=unique
-#         self.user_average = user_average
+    def __init__(self, features):
         self.features = defaultdict(lambda: False)
         for feature in features:
             self.features[feature] = features[feature]
+        print self.features
         self.numeric_features = defaultdict(dict)
         self.index = 0
     
@@ -60,44 +47,11 @@ class Analyzer:
             stripped_words.append(word_feature.split(":")[0])
         return stripped_words
     
-    def store_numeric_feature(self, index, feat_index, numeric_feature):
-        self.numeric_features[index][feat_index] = float(numeric_feature)
-    
-    def add_numeric_features(self, feature_matrix):
-#         print type(feature_matrix)
-        feature_array = feature_matrix.toarray()
-#         print feature_matrix
-        new_feature_array = []
-        for i in range(len(feature_array)):
-#             print i
-            current_features = feature_array[i].tolist()
-#             print current_features
-#             for j in self.numeric_features[i]:
-#             current_feats = []
-            for feat_index in self.numeric_features[i]:
-                current_features.append(self.numeric_features[i][feat_index])
-#             new_array = numpy.append(current_features, current_feats)
-#             current_feats.append(current_feats)
-#             print new_array
-#             new_feature_array.append(new_array)
-            new_feature_array.append(current_features)
-#             print current_features
-#         print new_feature_array
-        return csr_matrix(new_feature_array)
-    
-    def __call__(self, feature_string):
-#         print feature_string
-        feature_strings_ = feature_string.split("#")
-        feat_id = int(feature_strings_[0])
-        feature_strings = feature_strings_[1].split("|")
-#         print feature_strings
-        user_features = feature_strings[0]
-#         print user_features
-        question_features = feature_strings[1].split()
+    def store_numeric_feature(self, example_index, feat_name, numeric_feature):
+        self.numeric_features[example_index][feat_name] = float(numeric_feature)
         
-        answer_features = feature_strings[2]
-#         print question_features
-#         print self.features
+    def process_question_string(self, feat_id, question_string):
+        question_features = question_string.split()
         if self.features['ngram_range'] != (1,1):
             current_words = self.strip_tags_from_words(question_features)
             for ngram_length in range(self.features['ngram_range'][0], self.features['ngram_range'][1]+1):
@@ -107,13 +61,11 @@ class Analyzer:
         
         for feat_tuple in question_features:
             feat_tokens = feat_tuple.split(":")
-#             print feat_tuple
             if self.features['word']: #and self.ngram_range == (1,1):
                 yield feat_tokens[0]
                 
             if self.features['speech']:
                 if feat_tokens[1] != "Unk":
-#                     print feat_tokens[1]
                     yield feat_tokens[1]
                     
             if self.features['capital']:
@@ -141,56 +93,69 @@ class Analyzer:
                     yield feat_tokens[7]
                     
             if self.features['question_count']:
-                self.store_numeric_feature(feat_id, 0, int(feat_tokens[8]))
+                self.store_numeric_feature(feat_id, 'question_count', int(feat_tokens[8]))
             
             if self.features['question_average']:
-                self.store_numeric_feature(feat_id, 1, float(feat_tokens[9]))
+                self.store_numeric_feature(feat_id, 'question_average', float(feat_tokens[9]))
                 
             if self.features['question_percent']:
-                self.store_numeric_feature(feat_id, 2, float(feat_tokens[10]))
-            
-#             if self.key:
-#                     if feat_tokens[6] == "KEY":
-#                         yield feat_tokens[6]
+                self.store_numeric_feature(feat_id, 'question_percent', float(feat_tokens[10]))
                     
             if self.features['use_dictionary']:
                 for category in self.dictionary:
                     if feat_tokens[0] in self.dictionary[category]:
                         yield category.upper()
-        
-        user_features_tokens = user_features.split(":")
-#             user_feat_tokens = user_feature_tuple.split(":")
-#         print user_features_tokens
+                        
+    def process_user_string(self,feat_id, user_string):
+        user_features_tokens = user_string.split(":")
         if self.features['user_average']:
-#                 print user_feat_tokens
             if user_features_tokens[0] == "USR_AVG":
-#                 print "here"
-                self.store_numeric_feature(feat_id, 3, float(user_features_tokens[1]))
-#                 for i in range(int(float(user_features_tokens[1]))):
-#                     yield "USR_AVG"
-            else:
-                self.store_numeric_feature(feat_id, 3, 0)
-                    
-        answer_features_tokens = answer_features.split(":")
-#         print answer_features_tokens
+                self.store_numeric_feature(feat_id, 'user_average', float(user_features_tokens[1]))
+
+    def process_answer_string(self, feat_id, answer_string):
+        answer_features_tokens = answer_string.split(":")
         if self.features['wiki_answer']:
-#             if answer_features_tokens[0] == "WIKI_NUM":
-#                 for i in range(int(answer_features_tokens[1])):
-#                     yield "WIKI_NUM"
             if answer_features_tokens[2] == "WIKI_FIRST":
-                self.store_numeric_feature(feat_id, 4, int(answer_features_tokens[3]))
-#                 print int(answer_features_tokens[3])
-#                 for i in range(int(answer_features_tokens[3])):
-#                     yield "WIKI_FIRST"
-            else:
-                self.store_numeric_feature(feat_id, 4, 0)
-#         self.index+=1
+                self.store_numeric_feature(feat_id, 'wiki_first', int(answer_features_tokens[3]))
         if self.features['provided_answer']:
-#             print feat_tokens
-#             print "here"+feat_tokens[3]+" "+feat_tokens[4]
-            self.store_numeric_feature(feat_id, 5, int(answer_features_tokens[4]))
-        else:
-            self.store_numeric_feature(feat_id, 5, 0)
+            self.store_numeric_feature(feat_id, 'provided_answer', int(answer_features_tokens[4]))
+
+    def process_category_string(self, feat_id, category_string):
+        category_features_tokens = category_string.split(":")
+        if self.features['category_average']:
+            self.store_numeric_feature(feat_id, 'category_average', float(category_features_tokens[0]))
+    
+    def add_numeric_features(self, feature_matrix):
+        feature_array = feature_matrix.toarray()
+        new_feature_array = []
+        for i in range(len(feature_array)):
+            current_features = feature_array[i].tolist()
+            for feat_index in self.numeric_features[i]:
+                current_features.append(self.numeric_features[i][feat_index])
+            new_feature_array.append(current_features)
+        return csr_matrix(new_feature_array)
+    
+    def __call__(self, feature_string):
+        feature_strings_ = feature_string.split("#")
+        feat_id = int(feature_strings_[0])
+        feature_strings = feature_strings_[1].split("|")
+        
+        for question_feat in self.process_question_string(feat_id, feature_strings[1]):
+            yield question_feat
+        
+        self.process_user_string(feat_id, feature_strings[0])
+#         for user_feat in self.process_user_string(feat_id, feature_strings[0]):
+#             yield user_feat
+            
+        self.process_answer_string(feat_id, feature_strings[2])    
+#         for answer_feat in self.process_answer_string(feat_id, feature_strings[2]):
+#             yield answer_feat
+        self.process_category_string(feat_id, feature_strings[3])
+#         for category_feat in self.process_category_string(feat_id, feature_strings[3]):
+#             yield category_feat
+            
+            
+        
 
 class Example:
     def __init__(self):
@@ -198,9 +163,30 @@ class Example:
         self.question = ""
         self.user = 0
         self.answer = ""
+        #observed value of response time from training data
         self.observation =  0
+        #predicted value obtained from classifier
         self.prediction = 0
 
+class Category:
+    def __init__(self, category):
+        self.category = category
+        self.questions = []
+        self.average = 0.0
+        self.abs_total = 0.0
+        self.total = 0.0
+        self.count = 0
+        self.users = []
+        
+    def add_question(self, q_id):
+        self.questions.append(q_id)
+        
+    def add_occurrence(self, user_container, user_response):
+        self.count += 1
+        self.total += user_response
+        self.abs_total += abs(user_response)
+        self.average = float(self.total)/float(self.count)
+        self.users.append(user_container)
 
         
 class Question:
@@ -263,39 +249,31 @@ class User:
 
         
 class Featurizer:
-    def __init__(self, features=defaultdict(lambda: False), use_default=False, analyzer=u'word'):
+    def __init__(self, category_dict, features=defaultdict(lambda: False), use_default=False, analyzer=u'word'):
         self.stop_words=['uner', 'via', 'answer', 'ANSWER', 'was', 'his','the','that','and', 'points', 'pointsname', 'this', 'for', 'who', 'they','can', 'its', 'also', 'these', 'are', 'name', 'after', 'than', 'had', 'with', 'about', 'ftp', '10', '15', 'this', 'from', 'not', 'has', 'well']
         self.analyzer = analyzer
+        self.category_dict = category_dict
+        self.features = defaultdict(lambda: False)
+        for feat in features:
+            self.features[feat] = features[feat]
         
         if use_default:
             self.vectorizer = CountVectorizer(ngram_range=(1,10), stop_words=self.stop_words)
             self.default = True
-            self.features = features
         else:
             self.vectorizer = CountVectorizer(analyzer=analyzer)
             self.default = False
-            self.features = features
 
 
     def train_feature(self, examples, users, wiki_data, limit=-1):
-#         return self.vectorizer.fit_transform(examples)
-        count_features = self.vectorizer.fit_transform(ex for ex in all_examples(limit, examples, users, self.features, wiki_data, default = self.default))
+        count_features = self.vectorizer.fit_transform(ex for ex in all_examples(limit, examples, users, self.features, self.category_dict, wiki_data, default = self.default))
         if not self.default:
             return self.analyzer.add_numeric_features(count_features)
-#         features = numpy.array
-#         features = []
-#         for ex in examples:
-#             current_features = []
-#             for feature in all_examples(limit, [ex], users, self.features, default = self.default):
-#                 current_features.append(feature)
-#             features.append(current_features)
-#         print features
         return count_features
             
 
     def test_feature(self, examples, users, wiki_data, limit=-1):
-#         return self.vectorizer.transform(examples)
-        count_features = self.vectorizer.transform(ex for ex in all_examples(limit, examples, users, self.features, wiki_data, default = self.default))
+        count_features = self.vectorizer.transform(ex for ex in all_examples(limit, examples, users, self.features, self.category_dict, wiki_data, default = self.default))
         if not self.default:
                 return self.analyzer.add_numeric_features(count_features)
         return count_features
@@ -321,48 +299,36 @@ class Featurizer:
 
 
 
-def all_examples(limit, examples, users, features, answer_wiki_features, default=False):
-    
+def all_examples(limit, examples, users, features, category_dict, answer_wiki_features, default=False):
     for i in range(len(examples)):
         current_example = examples[i]
-#         example_str = ""
-#         example_str += "CAT:"+current_example.question.category
-#         example_str += " "
-#         example_str += current_example.question.question
         current_user = users[current_example.user]
-#         print current_example.question
-#         print current_example.observation
-        tagged_example_str = get_example_features(i,features, current_example.question, current_user, answer_wiki_features, default) 
+        tagged_example_str = get_example_features(i,features, category_dict, current_example.question, current_user, answer_wiki_features, default) 
         yield tagged_example_str
 
 
         
 def get_user_features(features, user):
-#     if user.u_id in user_features:
-#         return user_features[user.u_id]
     
     average = str(abs(user.average_position))
-#     print average
     user_feature = ""
     if features['user_average']:
-#         print average
         user_feature += "USR_AVG:"+average 
-#     if user.u_id not in user_features:
-#         user_features[user.u_id] = user_feature 
     return user_feature
 
+def get_category_features(pred_features, category, category_dict):
+    category_string = ""
+    if pred_features['category_average']:
+        category_string += str(category_dict[category].average)
+    return category_string
 
         
 def get_question_features(features, question_container):
-#     print features
-#     print question_container
     question = question_container.question
     category = question_container.category
     keywords = question_container.keywords
     answer = question_container.answer
     question_id = question_container.q_id
-#     if question_id in question_features:
-#         return question_features[question_id]
     
     annotated_words = []
     stop_words=['uner', 'via', 'answer', 'ANSWER', 'was', 'his','the','that','and', 'points', 'pointsname', 'this', 'for', 'who', 'they','can', 'its', 'also', 'these', 'are', 'name', 'after', 'than', 'had', 'with', 'about', 'ftp', '10', '15', 'this', 'from', 'not', 'has', 'well']
@@ -383,13 +349,6 @@ def get_question_features(features, question_container):
     c = Counter([values for values in words.itervalues()])
     counts = dict(c)
     
-#     words[word_index] = answer
-#     word_index = word_index + 1
-
-#     for key in keywords:
-#         words[word_index] = keywords[key]
-#         word_index = word_index + 1
-
     encounteredNoun = False
         
     for word_index in words:
@@ -400,7 +359,6 @@ def get_question_features(features, question_container):
         original_annotated_word = result.string[result.start(0):result.end(0)]
         annotated_word = ""
         if features['word']:
-#             print 'here'
             annotated_word = original_annotated_word
         if original_annotated_word.lower() in stop_words:
             prev_word_unannotated = word
@@ -435,7 +393,7 @@ def get_question_features(features, question_container):
             annotated_word+="BFRN"
         annotated_word += ":"
         if features['question_count']:
-            annotated_word += str(question_container.count)
+            annotated_word += str(int(question_container.count))
         annotated_word += ":"
         if features['question_average']:
             annotated_word += str(question_container.average_response)
@@ -448,43 +406,10 @@ def get_question_features(features, question_container):
         prev_word = original_annotated_word
         prev_word_unannotated = word
         
-#     annotated_words += "|"
-#     if features['wiki_answer']:
-#         if answer in answer_wiki_features:
-#             num_results = answer_wiki_features[answer][0]
-#             first_len = answer_wiki_features[answer][1]
-#             annotated_words += "WIKI_NUM:"+str(num_results)+":WIKI_FIRST:"+str(first_len)
-#         else:
-#             try:
-#                 results = eval(str(wikipedia.search(answer)))
-#                 num_results = len(results)
-#                 print num_results
-#                 print results
-#                 annotated_words += "WIKI_NUM:"+str(num_results)+":WIKI_FIRST:"
-#                 if num_results > 0:
-#                     first_result = wikipedia.page(str(results[0]))
-#                     first_len = len(first_result.content)
-#                     annotated_words+=str(first_len)
-#                     print first_len
-#                     answer_wiki_features[answer] = [num_results,first_len]
-#                 else:
-#                     annotated_words+="0"
-#                     answer_wiki_features[answer] = [num_results,0]
-#             except:
-#                 annotated_words += "WIKI_NUM:0:WIKI_FIRST:0"
-#                 answer_wiki_features[answer] = [0,0]
-#     else:
-#         annotated_words += ":::"
-#     annotated_words += ":"
-    
-
-        
     tagged = " ".join(annotated_words)
-#     question_features[question_id] = tagged
-#     print tagged
     return tagged
 
-def get_answer_features(answer, answer_wiki_features, provided_answer):
+def get_answer_features(features, answer, answer_wiki_features, provided_answer):
     annotated_words = ""
     question_string = "'"
     incorrect_threshold = 10
@@ -493,7 +418,6 @@ def get_answer_features(answer, answer_wiki_features, provided_answer):
             num_results = answer_wiki_features[answer][0]
             first_len = answer_wiki_features[answer][1]
             num_occurences = answer_wiki_features[answer][2]
-#             print num_occurences
             question_string += "WIKI_NUM:"+str(num_results)+":WIKI_FIRST:"+str(first_len)+":"+str(num_occurences)
         else:
             try:
@@ -502,16 +426,12 @@ def get_answer_features(answer, answer_wiki_features, provided_answer):
                     print "Suggestion: "+str(suggestion)+" "+str(len(results))+" answer: "+answer
                     if len(results) <= incorrect_threshold:
                         results = eval(str(wikipedia.search(str(suggestion), results=1000000)))
-#                 print results
                 num_results = len(results)
-#                 print num_results
-#                 print results
                 question_string += "WIKI_NUM:"+str(num_results)+":WIKI_FIRST:"
                 if num_results > 0:
                     first_result = wikipedia.page(str(results[0]))
                     first_len = len(first_result.content)
                     question_string+=str(first_len)
-#                     print first_len
                     
                     if features['provided_answer'] and len(provided_answer) > 0:
                         num_occurences = results.lower().count(provided_answer.lower())
@@ -530,11 +450,10 @@ def get_answer_features(answer, answer_wiki_features, provided_answer):
     else:
         question_string = "::::0"
     annotated_words += question_string+":"
-#     print question_string
     return annotated_words
 
 
-def get_example_features(example_id, features, question, user, answer_wiki_features, default=False):
+def get_example_features(example_id, features, category_dict, question, user, answer_wiki_features, default=False):
     
     question_features = get_question_features(features, question)
     user_features = get_user_features(features, user)
@@ -545,7 +464,9 @@ def get_example_features(example_id, features, question, user, answer_wiki_featu
         provided_answer = user.questions[question.q_id]['answer']
     else:
         provided_answer = ""
-    answer_features = get_answer_features(answer, answer_wiki_features, provided_answer)
+    answer_features = get_answer_features(features, answer, answer_wiki_features, provided_answer)
+    current_category = question.category
+    category_features = get_category_features(features, current_category, category_dict)
     if default:
         feature_list = []
         question_feature_list = question_features.split()
@@ -562,7 +483,7 @@ def get_example_features(example_id, features, question, user, answer_wiki_featu
 #         for feature in answer_
         feature_string = " ".join(feature_list)
     else:
-        feature_string = str(example_id)+"#"+user_features +"|"+question_features+"|"+answer_features
+        feature_string = str(example_id)+"#"+user_features +"|"+question_features+"|"+answer_features+"|"+category_features
     return feature_string
 
 
@@ -576,46 +497,98 @@ def rootMeanSquaredError(examples):
     return mean_squared_error(predictions, observations) ** 0.5
 
 
-def producePredictions(trainingExamples, testExamples, users, features, wiki_data):
-    analyzer = Analyzer(features=features)
-    featurizer = Featurizer(features, use_default=False, analyzer=analyzer)
+def producePredictions(trainingExamples, testExamples, users, continuous_features, binary_features, wiki_data, category_dict, average):
+    if 'kernel' in features_sign:
+        kernel = features_sign['kernel']
+    else:
+        kernel = 'rbf'
+        features_sign['kernel'] = 'rbf'
+        
+    if 'gamma' in features_sign:
+        gamma = float(features_sign['gamma'])
+    else:
+        gamma = 0.0
+        features_sign['gamma'] = str(gamma)
+    analyzer_abs = Analyzer(features=continuous_features)
+    featurizer_abs = Featurizer(category_dict, features=continuous_features, use_default=False, analyzer=analyzer_abs)
+    
+    analyzer_sign = Analyzer(features=binary_features)
+    featurizer_sign = Featurizer(category_dict, features=binary_features, use_default=False, analyzer=analyzer_sign)
 #     featurizer = Featurizer(use_default=True)
-    y_train = []
+    y_train_abs = []
+    y_train_sign = []
     for train_example in trainingExamples:
-        y_train.append(train_example.observation)
-    print "Generating training x"
-    x_train = featurizer.train_feature(trainingExamples, users, wiki_data)
-    print featurizer.vectorizer.vocabulary_.get('document')
+        y_train_abs.append(train_example.observation)
+#         y_train_abs.append(abs(train_example.observation))
+#         y_train_sign.append(sign(train_example.observation))
+    print "Generating continuous training x"
+    x_train_abs = featurizer_abs.train_feature(trainingExamples, users, wiki_data)
+    print featurizer_abs.vectorizer.vocabulary_.get('document')
 #     for feat in x_train:
 #         print feat
-    print x_train.toarray()[0]
-    print x_train.toarray()[50]
-#     print x_train.toarray()[4000]
-    del trainingExamples
-    print "Generating test x"
-    x_test = featurizer.test_feature(testExamples, users, wiki_data)
-    
-    
+    print x_train_abs.toarray()[0]
+    print x_train_abs.toarray()[50]
+# #     print x_train.toarray()[4000]
+# #     del trainingExamples
+    print "Generating continuous test x"
+    x_test_abs = featurizer_abs.test_feature(testExamples, users, wiki_data)
+      
+      
 #     classifier = SGDClassifier(loss='log', penalty='l2', shuffle=True)
 #     
 #     lr.fit(x_train, y_train)
+  
+#     continuous_classifier = linear_model.LinearRegression()
+#     continuous_classifier = svm.NuSVR()
+    continuous_classifier = ensemble.GradientBoostingRegressor(n_estimators=650)
+#     continuous_classifier = ensemble.AdaBoostRegressor()
+#     continuous_classifier = ensemble.RandomForestRegressor()
+#     continuous_classifier = ensemble.BaggingRegressor()
+      
+    print "Fitting continuous classifier"  
+    continuous_classifier.fit(x_train_abs.toarray(), y_train_abs)  
+      
+    print "Fit continuous training data"
+#     
+    print "Predicting continuous classifier"
+    predictions_abs = continuous_classifier.predict(x_test_abs.toarray())
+#     print predictions_abs
+    
+#     binary_classifier = SGDClassifier(loss='log', penalty='l2', shuffle=True)
+    
+#     binary_classifier = svm.SVC(kernel=kernel, class_weight='auto')
+#     binary_classifier = svm.SVC(kernel=kernel)
+# #     binary_classifier = neural_network.BernoulliRBM()
+#     
+#     print "Generating binary training x"
+#     x_train_sign = featurizer_sign.train_feature(trainingExamples, users, wiki_data)
+#     print x_train_sign.toarray()[0]
+#     
+#     print "Generating binary text x"
+#     x_test_sign = featurizer_sign.test_feature(testExamples, users, wiki_data)
+#     print x_test_sign.toarray()[0]
+#     print "Fitting binary classifier"
+#     binary_classifier.fit(x_train_sign, y_train_sign)
+#     
+#     print "Fit binary classifier"
+#     print "Predicting binary classifier"
+#     predictions_binary = binary_classifier.predict(x_test_sign)
+    
+#     print predictions_binary
+    
+    for i in range(len(predictions_abs)):
+        testExamples[i].prediction = int(ceil(predictions_abs[i]))
+    
+#     for i in range(len(predictions_binary)):
+#         current_sign = predictions_binary[i]
+#         current_abs = predictions_abs[i]
+#         testExamples[i].prediction = int(ceil(current_sign*current_abs))
+#         testExamples[i].prediction = int(ceil(current_sign*average))
+    
+#     return predictions_abs, predictions_binary
 
-    classifier = linear_model.LinearRegression()
-    
-    print "Fitting classifier"  
-    classifier.fit(x_train, y_train)  
-    
-    print "\nFit training data"
-    
-    predictions = classifier.predict(x_test)
-    
-    for i in range(len(predictions)):
-        testExamples[i].prediction = int(ceil(predictions[i]))
-    
-    return predictions
 
-
-def create_example_from_csv(row, questions, test=False):
+def create_example_from_csv(row, questions, categories_dict, test=False):
     current_example = Example()
     current_example.id = row['id']
     q_id = int(row['question'])
@@ -647,9 +620,13 @@ def create_example_from_csv(row, questions, test=False):
         
         current_example.answer = answer
         current_example.question.add_question_occurence(position)
+        
+        current_category = questions[q_id].category
+        categories_dict[current_category].add_occurrence(current_user, position)
+        
     return current_example
 
-def recordCrossValidationResults(err, recordFile, features_used):
+def recordCrossValidationResults(err, recordFile, features_abs_used, features_sign_used):
     if os.path.exists(recordFile) and os.path.isfile(recordFile):
         num_lines = sum(1 for line in open(recordFile))
     else:
@@ -662,7 +639,7 @@ def recordCrossValidationResults(err, recordFile, features_used):
     ts = time.time()
     timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
 #     recordFile.write('\nError:  '+str(err)+' Timestamp: '+str(timestamp)+ ' Features used: '+str(features_used))
-    writer.writerow({'Error':err, 'Time':timestamp, 'Features':str(features_used)})
+    writer.writerow({'Error':err, 'Time':timestamp, 'Features':"Continuous"+str(features_abs_used)+" Binary:"+str(features_sign_used)})
     recordFile.flush()
     recordFile.close()
     
@@ -687,7 +664,7 @@ def store_wiki_features(wiki_file, wiki_data):
     outfile.flush()
     outfile.close()
     
-def create_examples(fileName, nTrainingSets=-1, generate_test=False, all_test=False, limit=-1):
+def create_examples(fileName, categories_dict, questions_dict, nTrainingSets=-1, generate_test=False, all_test=False, limit=-1):
     fin = open(fileName, 'rt')
     reader = csv.DictReader(fin)
     
@@ -696,20 +673,26 @@ def create_examples(fileName, nTrainingSets=-1, generate_test=False, all_test=Fa
     
     rowIndex = 0
     nTrainingSets = args.local_selection
+    total = 0.0
+    count = 0.0
     for row in reader:
         if limit > 0 and rowIndex >= limit:
             break
         if all_test or generate_test and nTrainingSets > 0 and rowIndex % nTrainingSets == 0:
-            current_example = create_example_from_csv(row, questions, test=True)
+            current_example = create_example_from_csv(row, questions_dict, categories_dict, test=True)
             test_examples.append(current_example)
         else:
-            current_example = create_example_from_csv(row, questions)
+            total += float(row['position'])
+            count += 1
+            current_example = create_example_from_csv(row, questions_dict, categories_dict)
             train_examples.append(current_example)
         rowIndex += 1
     
     fin.close()
+    
     if generate_test:
-        return train_examples, test_examples
+        average = total/count
+        return train_examples, test_examples, average
     elif all_test:
         return test_examples
     else:
@@ -734,12 +717,17 @@ if __name__ == "__main__":
                            action='store_true', default=False, required=False)
     args = argparser.parse_args()
     
-    features = {'word':False, 'speech':True, 'capital':True, 'all_upper':False, 'foreign':True, 
-                'dictionary':[], 'use_dictionary':False, 'unique':True, 'ngram_range':(2,10), 'user_average':True,
-                'numbers':False, 'before_noun':True, 'wiki_answer':True, 'question_count':False, 'question_average':False,
-                'question_percent':False, 'provided_answer':False}
+    features_abs = {'word':False, 'speech':True, 'capital':True, 'all_upper':False, 'foreign':True, 
+                'dictionary':[], 'use_dictionary':False, 'unique':True, 'ngram_range':(2,20), 'user_average':True,
+                'numbers':False, 'before_noun':False, 'wiki_answer':True, 'question_count':False, 'question_average':True,
+                'question_percent':False, 'provided_answer':True, 'category_average':True}
     
-    usingWikipediaFeatures = features['wiki_answer']
+    features_sign = {'word':False, 'speech':True, 'capital':True, 'all_upper':False, 'foreign':True, 
+                'dictionary':[], 'use_dictionary':False, 'unique':True, 'ngram_range':(2,20), 'user_average':True,
+                'numbers':False, 'before_noun':False, 'wiki_answer':True, 'question_count':False, 'question_average':False,
+                'question_percent':False, 'provided_answer':True, 'category_average':True, 'kernel':'sigmoid'}
+    
+    usingWikipediaFeatures = features_abs['wiki_answer'] or features_sign['wiki_answer']
     
     if usingWikipediaFeatures and not args.regenerate_wiki:
         wiki_data_file = args.wiki_file
@@ -753,17 +741,25 @@ if __name__ == "__main__":
     fin = open(questionFile, 'rt')
     reader = csv.DictReader(fin)#, ['id', 'answer', 'type', 'category', 'question', 'keywords'])
     questions = dict()
+    categories = dict()
     for row in reader:
         key_dict = eval(row['keywords'])
         question_list = eval(row['question'])
+        category = row['category']
         question = Question(question_list, row['category'], key_dict, row['answer'], row['type'], row['id'])
+        if row['category'] not in categories:
+            current_category = Category(category)
+            categories[category] = current_category
+        else:
+            current_category = categories[category]
+        current_category.add_question(question.q_id)
         questions[int(row['id'])] = question
     fin.close()
     users = {}
     # Read training examples
     trainingFile = "train.csv"
     
-    trainingExamples, testExamples = create_examples(trainingFile, nTrainingSets=args.local_selection, generate_test=True, limit=args.limit)
+    trainingExamples, testExamples, average_abs = create_examples(trainingFile, categories, questions, nTrainingSets=args.local_selection, generate_test=True, limit=args.limit)
     
     
     print "\nRead data"
@@ -771,24 +767,13 @@ if __name__ == "__main__":
     if args.local:
         errors = []
                 
-        predictions = producePredictions(trainingExamples, testExamples, users, features, wiki_data) 
+        producePredictions(trainingExamples, testExamples, users, features_abs, features_sign, wiki_data, categories, average_abs) 
         
         print "\nFinished prediction"
         
-#         for i in range(len(predictions)):
-#             predict_y = predictions[i]
-#             test_example = testExamples[i]
-#             test_example.prediction = predict_y
-    
-        # Calculate root-mean-square deviation
         err = rootMeanSquaredError(testExamples)
         
-#         print "Error for iteration "+str(iteration)+": "+str(err)
-#         errors.append(err)
-        
-#         avg_error = np.mean(errors)
-        
-        recordCrossValidationResults(err, 'records.csv', features)
+        recordCrossValidationResults(err, 'records.csv', features_abs, features_sign)
         
         print "CROSS-VALIDATION RESULTS"
         print "ERROR: ", err#np.mean(errors)
@@ -798,12 +783,12 @@ if __name__ == "__main__":
         print "\nWriting predictions file"
         testFile = "test.csv"
         
-        testExamples = create_examples(testFile, all_test=True)
+        testExamples = create_examples(testFile, categories, questions, all_test=True)
         
-        trainingExamples = create_examples(trainingFile)
+        trainingExamples = create_examples(trainingFile, categories, questions)
         
         # Generate predictions
-        producePredictions(trainingExamples, testExamples, users, features, wiki_data)
+        producePredictions(trainingExamples, testExamples, users, features_abs, features_sign, wiki_data, categories, average_abs)
      
         # Produce submission file
         submissionFile = "submission.csv"
