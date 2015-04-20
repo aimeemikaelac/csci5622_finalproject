@@ -38,7 +38,15 @@ if __name__ == "__main__":
                         help='subsample this amount')
     args = parser.parse_args()
     
-
+    pos_data = {}
+    pos = DictReader(open("questions_processed.csv"),'r')
+    for ii in pos:
+        # print ii
+        try:
+            pos_data[int(float(ii['r']))] = ii[None][4]
+            # print ii[None][4]
+        except:
+            pass
 
     question_data = {}
     questions = DictReader(open("questions.csv"),'r')
@@ -132,7 +140,7 @@ if __name__ == "__main__":
 
                 ##usually not useful
                 # d['qans'] = int(float(ii['QuestAnswered']))
-                # d['category1'] = question_data[int(ii['question'])][1]
+                d['category1'] = question_data[int(ii['question'])][1]
                 # d['wikilen1'] = int(question_data[int(ii['question'])][4])
 
 
