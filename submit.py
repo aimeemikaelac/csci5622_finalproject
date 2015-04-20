@@ -15,15 +15,6 @@ import re
 import math
 import numpy as np
 
-def morphy_stem(word):
-    """
-    Simple stemmer
-    """
-    stem = wn.morphy(word)
-    if stem:
-        return stem.lower()
-    # else:
-    #     return word.lower()
 
 def myround(x, base=5):
     return int(base * round(float(x)/base))
@@ -235,6 +226,7 @@ if __name__ == "__main__":
             user_dict[str(ii['user'])] = []
             user_dict[str(ii['user'])].append(int(ii['user']))
 
+    classifier = {}
     for user in user_dict:    
         train = DictReader(open("train3.csv", 'r'))
         dev_train = []        
@@ -250,7 +242,7 @@ if __name__ == "__main__":
 
         # Train a classifier
         # print("Training classifier ...")
-        classifier = nltk.classify.NaiveBayesClassifier.train(dev_train)
+        classifier[user] = nltk.classify.NaiveBayesClassifier.train(dev_train)
         # classifier = nltk.classify.MaxentClassifier.train(dev_train, 'GIS', trace=0, max_iter=4)
 
 
@@ -289,7 +281,7 @@ if __name__ == "__main__":
                     except KeyError:
                         d['qpercent'] = one_q_per
                         QKeyError += 1
-                    full_test.append((d, int(ii['id'])))
+                    full_test.append((d, int(ii['id']), user))
             #Users seen in training
             elif int(ii['user']) in user_dict[user]:
                 d['upercent'] = alldata[int(ii['user'])][0][4]
@@ -298,7 +290,7 @@ if __name__ == "__main__":
                 except KeyError:
                     d['qpercent'] = one_q_per
                     QKeyError += 1
-                full_test.append((d, int(ii['id'])))
+                full_test.append((d, int(ii['id']), user))
             # elif int(ii['user']) in test_users:
             #     UserKeyError += 1
             #     d['upercent'] = one_q_user_uper
@@ -316,7 +308,7 @@ if __name__ == "__main__":
     #classify position
     for ii in full_test:
         #sign_answers[id] = answer
-        sign_answers[ii[1]] = classifier.classify(ii[0])
+        sign_answers[ii[1]] = classifier[ii[2]].classify(ii[0])
         # print sign_answers[ii[1]]
     # print "Length second full test = ", len(full_test)
 
