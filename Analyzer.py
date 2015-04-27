@@ -7,9 +7,11 @@ class Analyzer:
         self.features = defaultdict(lambda: False)
         for feature in features:
             self.features[feature] = features[feature]
-        print self.features
+#         print self.features
         self.numeric_features = defaultdict(dict)
-        self.index = 0
+        self.example_index = 0
+        self.example_index_table = {}
+        
     
     def strip_tags_from_words(self, word_list):
         stripped_words = []
@@ -78,6 +80,24 @@ class Analyzer:
             if self.features['question_length']:
                 self.store_numeric_feature(feat_id, 'question_length', int(feat_tokens[12]))
                 
+            if self.features['question_mark']:
+                self.store_numeric_feature(feat_id, 'question_mark', int(feat_tokens[13]))
+                
+            if self.features['question_sentence_count']:
+                self.store_numeric_feature(feat_id, 'question_sentence_count', int(feat_tokens[14]))
+                
+            if self.features['question_comma_count']:
+                self.store_numeric_feature(feat_id, 'question_comma_count', int(feat_tokens[15]))
+                
+            if self.features['question_double_quote_count']:
+                self.store_numeric_feature(feat_id, 'question_double_quote_count', int(feat_tokens[16]))
+                
+            if self.features['question_single_quote_count']:
+                self.store_numeric_feature(feat_id, 'question_single_quote_count', int(feat_tokens[17]))
+                
+            if self.features['question_asterisk_count']:
+                self.store_numeric_feature(feat_id, 'question_asterisk_count', int(feat_tokens[18]))
+                
                     
             if self.features['use_dictionary']:
                 for category in self.dictionary:
@@ -91,6 +111,8 @@ class Analyzer:
         if self.features['user_category_average']:
 #                 print float(user_features_tokens[3])
             self.store_numeric_feature(feat_id, 'user_category_average', float(user_features_tokens[1]))
+        if self.features['user_num_answered']:
+            self.store_numeric_feature(feat_id, 'user_num_answered', int(user_features_tokens[2]))
 
     def process_answer_string(self, feat_id, answer_string):
         answer_features_tokens = answer_string.split(":")
@@ -117,7 +139,13 @@ class Analyzer:
     
     def __call__(self, feature_string):
         feature_strings_ = feature_string.split("#")
-        feat_id = int(feature_strings_[0])
+        example_id = int(feature_strings_[0])
+        if example_id in self.example_index_table:
+            feat_id = self.example_index_table[example_id]
+        else:
+            feat_id = self.example_index
+            self.example_index += 1
+            self.example_index_table[example_id] = feat_id
         feature_strings = feature_strings_[1].split("|")
         
         for question_feat in self.process_question_string(feat_id, feature_strings[1]):

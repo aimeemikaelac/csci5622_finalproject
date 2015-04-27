@@ -2,6 +2,8 @@ from csv import DictWriter
 import csv
 import datetime
 from math import ceil
+from multiprocessing import Manager
+from multiprocessing.process import Process
 from numpy import sign
 import os
 import pickle
@@ -20,12 +22,15 @@ from User import User
 
 
 class Predictor:
-    def __init__(self, input_args, position_features, correctness_features, n_estimators=650, cluster=False):
+    def __init__(self, input_args, position_features, correctness_features, n_estimators=650, cluster=False, num_clusters=3, cluster_boundaries=[10,50,100], skip_clusters=[]):
         self.args = input_args
         self.position_features = position_features
         self.correctness_features = correctness_features
         self.n_estimators = n_estimators
-        self.cluster = False
+        self.cluster = cluster
+        self.num_clusters = 3
+        self.cluster_boundaries = cluster_boundaries
+        self.skip_clusters = skip_clusters
     
     def stringToInt(self, s):
         return int(float(s))  
@@ -49,108 +54,82 @@ class Predictor:
             errorFile.write(",".join([str(ex.id), str(self.rootMeanSquaredError([ex])), str(ex.user), str(ex.observation), str(ex.prediction), str(len(raw_question.split())), ex.question.answer, str(raw_question)])+"\n")
         errorFile.flush()
         errorFile.close()
-    
-    def producePredictions(self, trainingExamples, testExamples, users, continuous_features, binary_features, wiki_data, category_dict, average):
-        clusters = []
-        if not self.cluster:
-            clusters = [testExamples]
-        else:
-            answer_ranges = [10,50,100]
-            last_range = 0
-            for num_answered_range in answer_ranges:
-                current_cluster = []
-                for testExample in testExamples:
-                    if testExample.observation <= num_answered_range and testExample.observation > last_range:
-                        current_cluster.append(testExample)
-                clusters.append(current_cluster)
-                last_range = num_answered_range 
-                
-        if 'kernel' in binary_features:
-            kernel = binary_features['kernel']
-        else:
-            kernel = 'rbf'
-            binary_features['kernel'] = 'rbf'
-            
-        if 'gamma' in binary_features:
-            gamma = float(binary_features['gamma'])
-        else:
-            gamma = 0.0
-            binary_features['gamma'] = str(gamma)
-        for cluster in clusters:
-            analyzer_abs = Analyzer(features=continuous_features)
-            featurizer_abs = Featurizer(category_dict, features=continuous_features, use_default=False, analyzer=analyzer_abs)
-            
-            analyzer_sign = Analyzer(features=binary_features)
-            featurizer_sign = Featurizer(category_dict, features=binary_features, use_default=False, analyzer=analyzer_sign)
-        #     featurizer = Featurizer(use_default=True)
-            y_train_abs = []
-            y_train_sign = []
-            for train_example in trainingExamples:
-#                 y_train_abs.append(train_example.observation)
-                y_train_abs.append(abs(train_example.observation))
-                y_train_sign.append(sign(train_example.observation))
-            print "Generating continuous training x"
-            x_train_abs = featurizer_abs.train_feature(trainingExamples, users, wiki_data)
-            print featurizer_abs.vectorizer.vocabulary_.get('document')
-        #     for feat in x_train:
-        #         print feat
-            print x_train_abs.toarray()[0]
-            print x_train_abs.toarray()[50]
-        # #     print x_train.toarray()[4000]
-        # #     del trainingExamples
-            print "Generating continuous test x"
+        
+    def producePredictionsProcess(self, cluster, cluster_index, cluster_ranges, continuous_features, binary_features, category_dict, users, wiki_data, trainingExamples, clusters_out):
+        analyzer_abs = Analyzer(features=continuous_features)
+        featurizer_abs = Featurizer(category_dict, features=continuous_features, use_default=False, analyzer=analyzer_abs)
+        
+        analyzer_sign = Analyzer(features=binary_features)
+        featurizer_sign = Featurizer(category_dict, features=binary_features, use_default=False, analyzer=analyzer_sign)
+    #     featurizer = Featurizer(use_default=True)
+        y_train_abs = []
+        y_train_sign = []
+        for train_example in trainingExamples:
+            y_train_abs.append(train_example.observation)
+#                 y_train_abs.append(abs(train_example.observation))
+#                 y_train_sign.append(sign(train_example.observation))
+        print "Generating continuous training x"
+        x_train_abs = featurizer_abs.train_feature(trainingExamples, users, wiki_data)
+#             print featurizer_abs.vectorizer.vocabulary_.get('document')
+    #     for feat in x_train:
+    #         print feat
+#             print x_train_abs.toarray()[0]
+#             print x_train_abs.toarray()[50]
+    # #     print x_train.toarray()[4000]
+    # #     del trainingExamples
+        print "Generating continuous test x"
 #             x_test_abs = featurizer_abs.test_feature(testExamples, users, wiki_data)
-            x_test_abs = featurizer_abs.test_feature(cluster, users, wiki_data)
-              
-              
-        #     classifier = SGDClassifier(loss='log', penalty='l2', shuffle=True)
-        #     
-        #     lr.fit(x_train, y_train)
+        x_test_abs = featurizer_abs.test_feature(cluster, users, wiki_data)
           
-        #     continuous_classifier = linear_model.LinearRegression()
-        #     continuous_classifier = svm.NuSVR()
-            continuous_classifier = ensemble.GradientBoostingRegressor(n_estimators=self.n_estimators)
-        #     continuous_classifier = ensemble.AdaBoostRegressor(n_estimators=4000)
-        #     continuous_classifier = ensemble.RandomForestRegressor()
-        #     continuous_classifier = ensemble.BaggingRegressor()
-              
-            print "Fitting continuous classifier"  
-            continuous_classifier.fit(x_train_abs.toarray(), y_train_abs)  
-              
-            print "Fit continuous training data"
-        #     
-            print "Predicting continuous classifier"
-            predictions_abs = continuous_classifier.predict(x_test_abs.toarray())
-        #     print predictions_abs
-            
+          
+    #     classifier = SGDClassifier(loss='log', penalty='l2', shuffle=True)
+    #     
+    #     lr.fit(x_train, y_train)
+      
+    #     continuous_classifier = linear_model.LinearRegression()
+    #     continuous_classifier = svm.NuSVR()
+        continuous_classifier = ensemble.GradientBoostingRegressor(n_estimators=self.n_estimators)
+    #     continuous_classifier = ensemble.AdaBoostRegressor(n_estimators=4000)
+    #     continuous_classifier = ensemble.RandomForestRegressor()
+    #     continuous_classifier = ensemble.BaggingRegressor()
+          
+        print "Fitting continuous classifier"  
+        continuous_classifier.fit(x_train_abs.toarray(), y_train_abs)  
+          
+        print "Fit continuous training data"
+    #     
+        print "Predicting continuous classifier"
+        predictions_abs = continuous_classifier.predict(x_test_abs.toarray())
+    #     print predictions_abs
+        
 #             binary_classifier = SGDClassifier(loss='log', penalty='l2', shuffle=True)
-            
+        
 #             binary_classifier = svm.SVC(kernel=kernel, class_weight='auto')
-            binary_classifier = ensemble.GradientBoostingClassifier(n_estimators=1000)
-#             binary_classifier = neighbors.KNeighborsClassifier()
-            print "Fitting binary classifier"
-            print "Generating binary text x"
-            print "Generating binary training x"
-            
-            x_train_sign = featurizer_sign.train_feature(trainingExamples, users, wiki_data)
-            
-            x_test_sign = featurizer_sign.test_feature(cluster, users, wiki_data)
-        #     
-        #     
-            binary_classifier = svm.SVC(kernel=kernel)
-        #     print x_test_sign.toarray()[0]
-        #     print x_train_sign.toarray()[0]
-        # #     binary_classifier = neural_network.BernoulliRBM()
-            binary_classifier.fit(x_train_sign.toarray(), y_train_sign)
-        #     
-            print "Fit binary classifier"
-            print "Predicting binary classifier"
-            predictions_binary = binary_classifier.predict(x_test_sign.toarray())
-            
-        #     print predictions_binary
-            print "Features importance:"
-            print continuous_classifier.feature_importances_
-            
+#             binary_classifier = ensemble.GradientBoostingClassifier(n_estimators=1000)
+# #             binary_classifier = neighbors.KNeighborsClassifier()
+#             print "Fitting binary classifier"
+#             print "Generating binary text x"
+#             print "Generating binary training x"
+#             
+#             x_train_sign = featurizer_sign.train_feature(trainingExamples, users, wiki_data)
+#             
+#             x_test_sign = featurizer_sign.test_feature(cluster, users, wiki_data)
+#         #     
+#         #     
+#             binary_classifier = svm.SVC(kernel=kernel)
+#         #     print x_test_sign.toarray()[0]
+#         #     print x_train_sign.toarray()[0]
+#         # #     binary_classifier = neural_network.BernoulliRBM()
+#             binary_classifier.fit(x_train_sign.toarray(), y_train_sign)
+#         #     
+#             print "Fit binary classifier"
+#             print "Predicting binary classifier"
+#             predictions_binary = binary_classifier.predict(x_test_sign.toarray())
+#             
+#         #     print predictions_binary
+#             print "Features importance:"
+#             print continuous_classifier.feature_importances_
+        
 #             for i in range(len(predictions_abs)):
 #                 current_prediction = int(ceil(predictions_abs[i]))
 #                 current_question = cluster[i].question
@@ -167,15 +146,80 @@ class Predictor:
 #                 testExamples[i].prediction = int(ceil(predictions_abs[i]))
         
         for i in range(len(predictions_abs)):
-            current_sign = predictions_binary[i]
-            current_abs = predictions_abs[i]
+#             current_sign = predictions_binary[i]
+            current_sign = sign(predictions_abs[i])
+            current_abs = abs(predictions_abs[i])
+            current_question = cluster[i].question
+            if current_abs >= current_question.length:
+                current_abs = current_question.length
 #             cluster[i].prediction = int(ceil(random.choice([1, -1])*current_abs))
             cluster[i].prediction = int(ceil(current_sign*current_abs))
-            
+            clusters_out.append(cluster[i])
+        
+        current_err = self.rootMeanSquaredError(cluster)
+        print "ERROR for cluster "+str(cluster_index)+": "+str(current_err)
+        print "Range of cluster: "+str(cluster_ranges[cluster_index][0])+" - "+str(cluster_ranges[cluster_index][1])
+        print "Size of cluster: "+str(len(cluster))
+        
 #             testExamples[i].prediction = int(ceil(current_sign*current_abs))
 #             testExamples[i].prediction = int(ceil(current_sign*average))
-        
-    #     return predictions_abs, predictions_binary
+    
+#     return predictions_abs, predictions_binary
+
+    def producePredictions(self, trainingExamples, testExamples, users, continuous_features_array, binary_features_array, wiki_data, category_dict, average):
+        clusters = []
+        cluster_ranges = []
+        if not self.cluster:
+            clusters = [testExamples]
+        else:
+            answer_ranges = self.cluster_boundaries#[10,50,100]
+            last_range = 0
+            for num_answered_range in answer_ranges:
+                current_cluster = []
+                for testExample in testExamples:
+                    current_user_questions = users[testExample.user].num_questions 
+                    if current_user_questions <= num_answered_range and current_user_questions > last_range:
+                        current_cluster.append(testExample)
+                clusters.append(current_cluster)
+                cluster_ranges.append([last_range, num_answered_range])
+                last_range = num_answered_range 
+                
+#         if 'kernel' in binary_features:
+#             kernel = binary_features['kernel']
+#         else:
+#             kernel = 'rbf'
+#             binary_features['kernel'] = 'rbf'
+#             
+#         if 'gamma' in binary_features:
+#             gamma = float(binary_features['gamma'])
+#         else:
+#             gamma = 0.0
+#             binary_features['gamma'] = str(gamma)
+        predictor_processes = []
+        clusters_out = {}
+        manager = Manager()
+        for cluster_index in range(len(clusters)):
+            continuous_features = continuous_features_array[cluster_index]
+            binary_features = binary_features_array[cluster_index]
+            cluster = clusters[cluster_index]
+            cluster_out = manager.list()
+            if len(cluster) == 0 or cluster_index in self.skip_clusters:
+                continue
+            clusters_out[cluster_index] = cluster_out
+            current_process = Process(target=self.producePredictionsProcess, args=(cluster, cluster_index, cluster_ranges, continuous_features, binary_features, category_dict, users, wiki_data, trainingExamples,cluster_out))
+            predictor_processes.append(current_process)
+            current_process.start()
+            
+        for process in predictor_processes:
+            process.join()
+            
+        for cluster_index in range(len(clusters)):
+            if cluster_index in clusters_out:
+                orig_cluster = clusters[cluster_index]
+                out_cluster = clusters_out[cluster_index]
+                for ex_index in range(len(orig_cluster)):
+                    orig_cluster[ex_index].prediction = out_cluster[ex_index].prediction
+            
         
         
     def recordCrossValidationResults(self, err, recordFile, features_abs_used, features_sign_used):
@@ -294,7 +338,16 @@ class Predictor:
 
         
     def run(self):
-        usingWikipediaFeatures = self.position_features['wiki_answer'] or self.correctness_features['wiki_answer']
+        usingWikipediaFeatures = False
+        for features in self.position_features:
+            if features['wiki_answer']:
+                usingWikipediaFeatures = True
+                break
+        for features in self.correctness_features:
+            if features['wiki_answer'] or usingWikipediaFeatures:
+                usingWikipediaFeatures = True
+                break
+#         usingWikipediaFeatures = self.position_features['wiki_answer'] or self.correctness_features['wiki_answer']
     
         if usingWikipediaFeatures and not self.args.regenerate_wiki:
             wiki_data_file = self.args.wiki_file

@@ -22,19 +22,43 @@ if __name__ == "__main__":
                            action='store_true', default=False, required=False)
     args = argparser.parse_args()
     
-    features_abs = {'word':False, 'speech':True, 'capital':True, 'all_upper':False, 'foreign':True, 
+    features_abs_10 = {'word':False, 'speech':True, 'capital':True, 'all_upper':True, 'foreign':True, 
+                'unique':True, 'ngram_range':(2,5), 'user_average':True,
+                'numbers':False, 'before_noun':True, 'wiki_answer':True, 'question_count':False, 'question_average':True,
+                'question_percent':False, 'provided_answer':False, 'category_average':False, 'question_answer_percent':True,
+                'user_category_average':False, 'question_length':True, 'question_mark':False, 'question_sentence_count':True,
+                'question_comma_count':False, 'user_num_answered':False, 'question_double_quote_count':False, 
+                'question_single_quote_count':False, 'question_asterisk_count':False}
+    
+    features_abs_50 = {'word':False, 'speech':True, 'capital':True, 'all_upper':True, 'foreign':True, 
+                'unique':True, 'ngram_range':(2,20), 'user_average':True,
+                'numbers':False, 'before_noun':True, 'wiki_answer':False, 'question_count':False, 'question_average':True,
+                'question_percent':False, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
+                'user_category_average':False, 'question_length':True, 'question_mark':False, 'question_sentence_count':True,
+                'question_comma_count':True, 'user_num_answered':False, 'question_double_quote_count':True, 
+                'question_single_quote_count':False, 'question_asterisk_count':False}
+    
+    features_abs_100 = {'word':False, 'speech':True, 'capital':True, 'all_upper':True, 'foreign':True, 
                 'unique':True, 'ngram_range':(2,20), 'user_average':True,
                 'numbers':False, 'before_noun':True, 'wiki_answer':True, 'question_count':False, 'question_average':True,
-                'question_percent':False, 'provided_answer':True, 'category_average':True, 'question_answer_percent':True,
-                'user_category_average':False, 'question_length':True}
+                'question_percent':False, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
+                'user_category_average':False, 'question_length':True, 'question_mark':False, 'question_sentence_count':True,
+                'question_comma_count':True, 'user_num_answered':False, 'question_double_quote_count':True, 
+                'question_single_quote_count':False, 'question_asterisk_count':False}
     
-    features_sign = {'word':False, 'speech':True, 'capital':True, 'all_upper':False, 'foreign':True, 
+    features_sign_10 = {'word':False, 'speech':True, 'capital':True, 'all_upper':False, 'foreign':True, 
                 'unique':True, 'ngram_range':(2,20), 'user_average':True,
                 'numbers':False, 'before_noun':True, 'wiki_answer':True, 'question_count':False, 'question_average':True,
                 'question_percent':False, 'provided_answer':True, 'category_average':True, 'question_answer_percent':True,
                 'user_category_average':True, 'kernel':'sigmoid', 'question_length':True}
     
-    predictor = Predictor(args, features_abs, features_sign, cluster=False)
+    features_abs = [features_abs_10, features_abs_50, features_abs_100, features_abs_100, features_abs_100,
+                     features_abs_100, features_abs_100, features_abs_100, features_abs_100]
+    features_sign = [features_sign_10, features_sign_10, features_sign_10, features_sign_10, features_sign_10,
+                      features_sign_10, features_sign_10, features_sign_10, features_sign_10]
+    
+    predictor = Predictor(args, features_abs, features_sign, cluster=True, n_estimators=1000, 
+                          cluster_boundaries=[10,50,100,150,200,500, 1000, 5000,100000000000])
     predictor.run()
 
 

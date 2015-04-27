@@ -154,6 +154,9 @@ class Featurizer:
         if features['user_category_average']:
             category_data = user.category_averages[category]
             user_features += str(float(category_data[0]))
+        user_features += ":"
+        if features['user_num_answered']:
+            user_features += str(user.num_questions)
             
         return user_features
 
@@ -181,9 +184,23 @@ class Featurizer:
         words = {}
         pos = {}
         
+        question_mark_count = 0
+        period_count = 0
+        comma_count = 0
+        double_quote_count = 0
+        single_quote_count = 0
+        asterisk_count = 0
+        
         word_index = 0
         for word_tuple in question:
-            words[word_index] = word_tuple[0]
+            word = word_tuple[0]
+            words[word_index] = word
+            question_mark_count += word.count("?")
+            period_count += word.count(".")
+            comma_count += word.count(",")
+            double_quote_count += word.count("\"")
+            single_quote_count += word.count("'")
+            asterisk_count += word.count("*")
             pos[word_index] = word_tuple[1]
             word_index = word_index + 1
         
@@ -211,7 +228,7 @@ class Featurizer:
                     if pos[word_index] in ['NN', 'NNS', 'NNP', 'NNPS']:
                         encounteredNoun = True
             annotated_word += ":"
-            if features['capital'] and original_annotated_word[0].isupper() and len(prev_word_unannotated) > 0 and reg_exp_alphanum.match(prev_word_unannotated[len(prev_word_unannotated)-1]):
+            if features['capital'] and len(original_annotated_word) > 0 and original_annotated_word[0].isupper() and len(prev_word_unannotated) > 0 and reg_exp_alphanum.match(prev_word_unannotated[len(prev_word_unannotated)-1]):
                 annotated_word+="C"
             annotated_word += ":"
             if features['all_upper'] and original_annotated_word.isupper():
@@ -247,6 +264,24 @@ class Featurizer:
             annotated_word += ":"
             if features['question_length']:
                 annotated_word += str(len(words))
+            annotated_word += ":"
+            if self.features['question_mark']:
+                annotated_word += str(question_mark_count)
+            annotated_word += ":"
+            if self.features['question_sentence_count']:
+                annotated_word += str(period_count)
+            annotated_word += ":"
+            if self.features['question_comma_count']:
+                annotated_word += str(comma_count)
+            annotated_word += ":"
+            if self.features['question_double_quote_count']:
+                annotated_word += str(double_quote_count)
+            annotated_word += ":"
+            if self.features['question_single_quote_count']:
+                annotated_word += str(single_quote_count)
+            annotated_word += ":"
+            if self.features['question_asterisk_count']:
+                annotated_word += str(asterisk_count)
             
             
             annotated_words.append(annotated_word)
