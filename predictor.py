@@ -17,7 +17,8 @@ class Predictor:
         self.positionPredictor = Position_Mean()
 
         #self.accuracyPredictor = Accuracy_Regression()
-        self.accuracyPredictor = Accuracy_AllCorrect()
+        #self.accuracyPredictor = Accuracy_AllCorrect()
+        self.accuracyPredictor = Accuracy_Boost()
 
     def producePredictions(self, trainingSet, testSet):
         # Generate some additional data from training set
@@ -42,24 +43,10 @@ class Predictor:
             example.prediction = example.predicted_correctness * example.predicted_time
 
 
-# ---------------------------------------------------
-# class Position_Regression
-# Predicts time-to-answer using Regression
-# ---------------------------------------------------
-class Position_Regression:
+
+class FeaturePredictor:
     def __init__(self):
         self.users = {}
-        pass
-
-    def predict(self, trainingSet, testSet):
-        X = [self.features(x) for x in trainingSet]
-        Y = [x.observed_time for x in trainingSet]
-        logreg = linear_model.LinearRegression()
-        logreg.fit(X,Y)
-        for example in testSet:
-            X = self.features(example)
-            Y = logreg.predict(X)
-            example.predicted_time = Y
 
     def features(self, ex):
         # Produce a vector of features for predicting time-to-answer
@@ -85,11 +72,30 @@ class Position_Regression:
                         ]
         return features
 
+
+# ---------------------------------------------------
+# class Position_Regression
+# Predicts time-to-answer using Regression
+# ---------------------------------------------------
+class Position_Regression(FeaturePredictor):
+    def __init__(self):
+        self.users = {}
+
+    def predict(self, trainingSet, testSet):
+        X = [self.features(x) for x in trainingSet]
+        Y = [x.observed_time for x in trainingSet]
+        logreg = linear_model.LinearRegression()
+        logreg.fit(X,Y)
+        for example in testSet:
+            X = self.features(example)
+            Y = logreg.predict(X)
+            example.predicted_time = Y
+
 # ---------------------------------------------------
 # class Accuracy_Regression
 # Predicts answer accuracy using Logistic Regression
 # ---------------------------------------------------
-class Accuracy_Regression:
+class Accuracy_Regression(FeaturePredictor):
     def __init__(self):
         self.users = {}
 
@@ -104,30 +110,6 @@ class Accuracy_Regression:
             X = self.features(example)
             Y = logreg.predict(X)
             example.predicted_correctness = Y[0]
-
-    def features(self, ex):
-        # Produce a vector of features for a specific example 
-        try:
-            user = self.users[ex.user]
-        except KeyError:
-            user = self.users[-1]
-        features = [
-                    # Question features
-                    len(ex.question.text),
-                    ex.question.answer_accuracy,
-                    ex.question.mean_position,
-                    len(ex.question.examples),
-                    # User features
-                    len(user.examples),
-                    user.mean_accuracy,
-                    user.mean_position,
-                    len(user.category_examples[ex.question.category]),
-                    user.category_accuracy[ex.question.category],
-                    user.category_position[ex.question.category],
-                    self.users[-1].category_accuracy[ex.question.category],
-                    self.users[-1].category_position[ex.question.category],
-                        ]
-        return features
 
 class Accuracy_AllCorrect:
     def __init__(self):
@@ -156,18 +138,14 @@ class Position_Mean:
         for example in testSet:
             example.predicted_time = averageTime
 
-# -----------------------------------------------
-# Predicting answer accuracy
-#
 
-
-class Accuracy_SVM:
+class Accuracy_SVM(FeaturePredictor):
     def __init__(self):
         self.users = {}
 
     def predict(self, trainingSet, testSet):
         # SVM to predict correctness
-        X = [accuracyFeatures(x) for x in trainingSet]
+        X = [self.features(x) for x in trainingSet]
         Y = [x.observed_correctness for x in trainingSet]
         svc = SVC()
         svc.fit(X,Y)
@@ -176,30 +154,20 @@ class Accuracy_SVM:
             Y = svc.predict(X)
             example.predicted_correctness = Y[0]
 
-    def features(self, ex):
-        # Produce a vector of features for a specific example 
-        try:
-            user = self.users[ex.user]
-        except KeyError:
-            user = self.users[-1]
-        features = [
-                    # Question features
-                    len(ex.question.text),
-                    ex.question.answer_accuracy,
-                    ex.question.mean_position,
-                    len(ex.question.examples),
-                    # User features
-                    len(user.examples),
-                    user.mean_accuracy,
-                    user.mean_position,
-                    len(user.category_examples[ex.question.category]),
-                    user.category_accuracy[ex.question.category],
-                    user.category_position[ex.question.category],
-                    self.users[-1].category_accuracy[ex.question.category],
-                    self.users[-1].category_position[ex.question.category],
-                        ]
-        return features
+class Accuracy_Boost(FeaturePredictor):
+    def __init__(self):
+        self.users = {}
 
+    def predict(self, trainingSet, testSet):
+        bdt = AdaBoostClassifier(DecisionTreeClassifier(max_depth=1),
+                                 algorithm="SAMME",
+                                 n_estimators=200)
 
-
+        X = [self.features(x) for x in trainingSet]
+        Y = [x.observed_correctness for x in trainingSet]
+        bdt.fit(X,Y)
+        for example in testSet:
+            X = self.features(example)
+            Y = bdt.predict(X)
+            example.predicted_correctness = Y[0]
 

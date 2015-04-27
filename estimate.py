@@ -25,22 +25,19 @@ if __name__ == "__main__":
     for ex in examples:
         ex.question = questions[ex.question]
 
+    #examples = examples[:int(.1 * len(examples))]
     # Initialize Predictor
     predictor = Predictor(questions)
 
-
-    # Partition cross-validation sets
+    # Cross validation 
     training_set_size = .1
     boundary = int(training_set_size * len(examples))
     validation_test_set = examples[:boundary ]
     validation_training_set = examples[boundary:]
 
-    # Perform cross validation on training examples 
-    # Generate predictions
-
     predictor.producePredictions(validation_training_set, validation_test_set)
 
-    # Calculate errors 
+    # Calculate cross-validation errors 
     err = Error(validation_test_set)
 
     # Show round results
