@@ -12,6 +12,7 @@ class Example:
         self.id = -1
         self.question = -1
         self.user = -1
+        self.position = 0
         self.answer = ""
         # Observed position from training data
         self.observation =  0           # 'position' from training data. eg. -78, 67
@@ -30,13 +31,14 @@ def loadTrainingExamples(trainingFile):
     for row in reader:
         example = Example()
         example.id = stringToInt(row['id'])
-        #example.question = questions[stringToInt(row['question'])]
         example.question = stringToInt(row['question'])
         example.user = stringToInt(row['user'])
+        example.position = stringToInt(row['position'])
+        example.answer = row['answer']
+        #example.question = questions[stringToInt(row['question'])]
         example.observation = stringToInt(row['position'])
         example.observed_time = abs(example.observation)
         example.observed_correctness = example.observation / example.observed_time
-        example.answer = row['answer']
         examples.append(example)
     fin.close()
     return examples
