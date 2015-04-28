@@ -8,7 +8,6 @@ from Predictor import Predictor
 
 
 if __name__ == "__main__":
-    nltk.download('wordnet')
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--local", help="Use training data as a test of the model",
                            action='store_true', default=True, required=False)
@@ -29,6 +28,7 @@ if __name__ == "__main__":
     argparser.add_argument("--records_file", help="Records file to load best features from",
                            action='store_true', default="records.csv", required=False)
     args = argparser.parse_args()
+    nltk.download('wordnet')
     
     cluster_boundaries = [10,50,100,150,200,500, 1000, 5000]
     if args.load_best_features:
