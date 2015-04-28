@@ -82,8 +82,8 @@ if __name__ == "__main__":
                     'question_single_quote_count':False, 'question_asterisk_count':False}
         
         features_abs_200 = {'word':False, 'speech':True, 'capital':True, 'all_upper':False, 'foreign':True, 
-                    'unique':False, 'ngram_range':(2,30), 'user_average':True,
-                    'numbers':False, 'before_noun':False, 'wiki_answer':True, 'question_count':True, 'question_average':True,
+                    'unique':False, 'ngram_range':(2,20), 'user_average':True,
+                    'numbers':False, 'before_noun':True, 'wiki_answer':True, 'question_count':True, 'question_average':True,
                     'question_percent':True, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
                     'user_category_average':True, 'question_length':True, 'question_mark':False, 'question_sentence_count':False,
                     'question_comma_count':False, 'user_num_answered':True, 'question_double_quote_count':True, 
