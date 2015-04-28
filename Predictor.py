@@ -2,15 +2,18 @@ from csv import DictWriter
 import csv
 import datetime
 from math import ceil
-from multiprocessing import Manager
+from multiprocessing import Manager, Pool
+from multiprocessing import Value
 from multiprocessing.process import Process
 from numpy import sign
+from numpy.ctypeslib import ctypes
 import os
 import pickle
 import random
-from sklearn import ensemble, svm, neighbors
+from sklearn import ensemble, svm, neighbors, gaussian_process, kernel_ridge
 from sklearn.linear_model.stochastic_gradient import SGDClassifier
 from sklearn.metrics.regression import mean_squared_error
+from sklearn.tree.tree import DecisionTreeRegressor
 import time
 
 from Analyzer import Analyzer
@@ -22,7 +25,9 @@ from User import User
 
 
 class Predictor:
-    def __init__(self, input_args, position_features, correctness_features, n_estimators=650, cluster=False, num_clusters=3, cluster_boundaries=[10,50,100], skip_clusters=[]):
+    def __init__(self, input_args, position_features, correctness_features, n_estimators=650, 
+                 cluster=False, num_clusters=3, cluster_boundaries=[10,50,100], skip_clusters=[],
+                 cluster_training_data=False):
         self.args = input_args
         self.position_features = position_features
         self.correctness_features = correctness_features
@@ -31,6 +36,7 @@ class Predictor:
         self.num_clusters = 3
         self.cluster_boundaries = cluster_boundaries
         self.skip_clusters = skip_clusters
+        self.cluster_training_data=cluster_training_data
     
     def stringToInt(self, s):
         return int(float(s))  
@@ -41,26 +47,29 @@ class Predictor:
         observations = [x.observation for x in examples]
         return mean_squared_error(predictions, observations) ** 0.5
     
-    def recordErrors(self, errorFileName, examples):
+    def recordErrors(self, errorFileName, examples, users):
         sortedExamples = sorted(examples, key=lambda ex:self.rootMeanSquaredError([ex]), reverse=True)
         errorFile = open(errorFileName, 'w')
-        errorFile.write("Example ID,RMS ERROR,User ID,Actual Response Time,Predicted Response Time,Question Length,Question Answer,Question\n")
+        errorFile.write("Example ID,RMS ERROR,User ID,Questions Answered,Actual Response Time,Predicted Response Time,Question Length,Question Answer,Question\n")
         for ex in sortedExamples:
             raw_question_words = []
             for tuple in ex.question.question:
                 raw_question_words.append(tuple[0])
             raw_question = " ".join(raw_question_words)
             raw_question = raw_question.replace(",","_")
-            errorFile.write(",".join([str(ex.id), str(self.rootMeanSquaredError([ex])), str(ex.user), str(ex.observation), str(ex.prediction), str(len(raw_question.split())), ex.question.answer, str(raw_question)])+"\n")
+            errorFile.write(",".join([str(ex.id), str(self.rootMeanSquaredError([ex])), str(ex.user), str(users[ex.user].num_questions), str(ex.observation), str(ex.prediction), str(len(raw_question.split())), ex.question.answer, str(raw_question)])+"\n")
         errorFile.flush()
         errorFile.close()
         
-    def producePredictionsProcess(self, cluster, cluster_index, cluster_ranges, continuous_features, binary_features, category_dict, users, wiki_data, trainingExamples, clusters_out):
+    def producePredictionsProcess(self, cluster, cluster_index, cluster_ranges, 
+                                  continuous_features, binary_features, category_dict, 
+                                  users, wiki_data, trainingExamples, clusters_out, err_val):
         analyzer_abs = Analyzer(features=continuous_features)
         featurizer_abs = Featurizer(category_dict, features=continuous_features, use_default=False, analyzer=analyzer_abs)
         
         analyzer_sign = Analyzer(features=binary_features)
         featurizer_sign = Featurizer(category_dict, features=binary_features, use_default=False, analyzer=analyzer_sign)
+        range_string = str(cluster_ranges[cluster_index][0])+" - "+str(cluster_ranges[cluster_index][1])
     #     featurizer = Featurizer(use_default=True)
         y_train_abs = []
         y_train_sign = []
@@ -68,7 +77,7 @@ class Predictor:
             y_train_abs.append(train_example.observation)
 #                 y_train_abs.append(abs(train_example.observation))
 #                 y_train_sign.append(sign(train_example.observation))
-        print "Generating continuous training x"
+        print "Generating continuous training x for range: "+range_string
         x_train_abs = featurizer_abs.train_feature(trainingExamples, users, wiki_data)
 #             print featurizer_abs.vectorizer.vocabulary_.get('document')
     #     for feat in x_train:
@@ -77,7 +86,7 @@ class Predictor:
 #             print x_train_abs.toarray()[50]
     # #     print x_train.toarray()[4000]
     # #     del trainingExamples
-        print "Generating continuous test x"
+        print "Generating continuous test x for range: "+range_string
 #             x_test_abs = featurizer_abs.test_feature(testExamples, users, wiki_data)
         x_test_abs = featurizer_abs.test_feature(cluster, users, wiki_data)
           
@@ -88,17 +97,36 @@ class Predictor:
       
     #     continuous_classifier = linear_model.LinearRegression()
     #     continuous_classifier = svm.NuSVR()
-        continuous_classifier = ensemble.GradientBoostingRegressor(n_estimators=self.n_estimators)
+        if 'kernel' in continuous_features:
+            kernel = continuous_features['kernel']
+        else:
+            kernel = 'rbf'
+        if 'continuous_classifier' in continuous_features:
+            classifier_type = continuous_features['continuous_classifier']
+        else:
+            classifier_type = False
+        if not classifier_type or classifier_type == 'ensemble_gradientboost':
+            continuous_classifier = ensemble.GradientBoostingRegressor(n_estimators=self.n_estimators)
+        elif classifier_type == 'svr':
+            continuous_classifier = svm.NuSVR(kernel=kernel, )#svm.SVR(kernel=kernel)
+        elif classifier_type == 'gaussian_process':
+            continuous_classifier = gaussian_process.GaussianProcess(storage_mode='light')
+        elif classifier_type == 'decision_tree_regressor':
+            continuous_classifier = DecisionTreeRegressor()
+        elif classifier_type == 'kernel_ridge':
+            continuous_classifier = kernel_ridge.KernelRidge(kernel=kernel)
+        else:
+            continuous_classifier = ensemble.GradientBoostingRegressor(n_estimators=self.n_estimators)
     #     continuous_classifier = ensemble.AdaBoostRegressor(n_estimators=4000)
     #     continuous_classifier = ensemble.RandomForestRegressor()
     #     continuous_classifier = ensemble.BaggingRegressor()
           
-        print "Fitting continuous classifier"  
+        print "Fitting continuous classifier for range: "+range_string  
         continuous_classifier.fit(x_train_abs.toarray(), y_train_abs)  
           
-        print "Fit continuous training data"
+        print "Fit continuous training data for range: "+range_string
     #     
-        print "Predicting continuous classifier"
+        print "Predicting continuous classifier for range: "+range_string
         predictions_abs = continuous_classifier.predict(x_test_abs.toarray())
     #     print predictions_abs
         
@@ -157,9 +185,10 @@ class Predictor:
             clusters_out.append(cluster[i])
         
         current_err = self.rootMeanSquaredError(cluster)
-        print "ERROR for cluster "+str(cluster_index)+": "+str(current_err)
-        print "Range of cluster: "+str(cluster_ranges[cluster_index][0])+" - "+str(cluster_ranges[cluster_index][1])
-        print "Size of cluster: "+str(len(cluster))
+        print str("ERROR for cluster "+str(cluster_index)+": "+str(current_err) +"\n"+
+                  "Range of cluster: "+range_string+"\n"+
+                  "Size of cluster: "+str(len(cluster)))
+        err_val.value = float(current_err)
         
 #             testExamples[i].prediction = int(ceil(current_sign*current_abs))
 #             testExamples[i].prediction = int(ceil(current_sign*average))
@@ -169,21 +198,30 @@ class Predictor:
     def producePredictions(self, trainingExamples, testExamples, users, continuous_features_array, binary_features_array, wiki_data, category_dict, average):
         clusters = []
         cluster_ranges = []
+        trainingExamples_ranges = []
         if not self.cluster:
             clusters = [testExamples]
+            cluster_ranges.append([0, len(testExamples)])
+            trainingExamples_ranges = [trainingExamples]
         else:
             answer_ranges = self.cluster_boundaries#[10,50,100]
             last_range = 0
             for num_answered_range in answer_ranges:
                 current_cluster = []
+                current_training_cluster = []
                 for testExample in testExamples:
                     current_user_questions = users[testExample.user].num_questions 
                     if current_user_questions <= num_answered_range and current_user_questions > last_range:
                         current_cluster.append(testExample)
+                if self.cluster_training_data:
+                    for trainingExample in trainingExamples:
+                        current_example_user_questions = users[trainingExample.user].num_questions
+                        if current_example_user_questions <= num_answered_range and current_example_user_questions > last_range:
+                            current_training_cluster.append(trainingExample)
+                    trainingExamples_ranges.append(current_training_cluster)
                 clusters.append(current_cluster)
                 cluster_ranges.append([last_range, num_answered_range])
                 last_range = num_answered_range 
-                
 #         if 'kernel' in binary_features:
 #             kernel = binary_features['kernel']
 #         else:
@@ -197,16 +235,38 @@ class Predictor:
 #             binary_features['gamma'] = str(gamma)
         predictor_processes = []
         clusters_out = {}
+        clusters_error = {}
         manager = Manager()
         for cluster_index in range(len(clusters)):
+            high_memory_process = False
             continuous_features = continuous_features_array[cluster_index]
+            if 'continuous_classifier' in continuous_features:
+                classifier_type = continuous_features['continuous_classifier']
+            else:
+                classifier_type = ""
+            if classifier_type == 'gaussian_process' or classifier_type == 'decision_tree_regressor' or classifier_type == 'kernel_ridge':
+                high_memory_process = True
             binary_features = binary_features_array[cluster_index]
             cluster = clusters[cluster_index]
+            if self.cluster_training_data:
+                trainingExamplesCluster = trainingExamples_ranges[cluster_index]
+            else:
+                trainingExamplesCluster = trainingExamples
             cluster_out = manager.list()
             if len(cluster) == 0 or cluster_index in self.skip_clusters:
                 continue
+            err_val = Value(ctypes.c_float, 0.0)
+            clusters_error[cluster_index] = err_val
             clusters_out[cluster_index] = cluster_out
-            current_process = Process(target=self.producePredictionsProcess, args=(cluster, cluster_index, cluster_ranges, continuous_features, binary_features, category_dict, users, wiki_data, trainingExamples,cluster_out))
+            current_process = Process(target=self.producePredictionsProcess, 
+                                      args=(cluster, cluster_index, cluster_ranges, continuous_features, 
+                                            binary_features, category_dict, users, wiki_data, 
+                                            trainingExamplesCluster, cluster_out, err_val))
+            if high_memory_process:
+                for process in predictor_processes:
+                    process.join()
+                    predictor_processes.remove(process)
+                print "Starting high memory process"
             predictor_processes.append(current_process)
             current_process.start()
             
@@ -219,23 +279,24 @@ class Predictor:
                 out_cluster = clusters_out[cluster_index]
                 for ex_index in range(len(orig_cluster)):
                     orig_cluster[ex_index].prediction = out_cluster[ex_index].prediction
+        return clusters_error, cluster_ranges
             
         
         
-    def recordCrossValidationResults(self, err, recordFile, features_abs_used, features_sign_used):
+    def recordCrossValidationResults(self, err, recordFile, features_abs_used, features_sign_used, ranges_string):
         if os.path.exists(recordFile) and os.path.isfile(recordFile):
             num_lines = sum(1 for line in open(recordFile))
         else:
             num_lines = 0
         recordFile = open(recordFile, 'a')
-        writer = DictWriter(recordFile, fieldnames=["Error", "Time", "Features"])
+        writer = DictWriter(recordFile, fieldnames=["Error", "Time", "Range Errors", "Features"])
         if num_lines == 0:
             writer.writeheader()
         
         ts = time.time()
         timestamp = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
     #     recordFile.write('\nError:  '+str(err)+' Timestamp: '+str(timestamp)+ ' Features used: '+str(features_used))
-        writer.writerow({'Error':err, 'Time':timestamp, 'Features':"Continuous"+str(features_abs_used)+" Binary:"+str(features_sign_used)})
+        writer.writerow({'Error':err, 'Time':timestamp, 'Range Errors':ranges_string, 'Features':"Continuous:"+str(features_abs_used)+" Binary:"+str(features_sign_used)})
         recordFile.flush()
         recordFile.close()
     
@@ -387,15 +448,21 @@ class Predictor:
         if self.args.local:
             errors = []
                     
-            self.producePredictions(trainingExamples, testExamples, users, self.position_features, self.correctness_features, wiki_data, categories, average_abs) 
+            process_errors, process_ranges = self.producePredictions(trainingExamples, testExamples, users, self.position_features, self.correctness_features, wiki_data, categories, average_abs)
+            
+            range_str_array = []
+            
+            for error_index in range(len(process_errors)):
+                interval = str(process_ranges[error_index][0])+" - "+str(process_ranges[error_index][1])+" : "
+                range_str_array.append(interval+str(process_errors[error_index].value))
             
             print "\nFinished prediction"
             
             err = self.rootMeanSquaredError(testExamples)
             
-            self.recordCrossValidationResults(err, 'records.csv', self.position_features, self.correctness_features)
+            self.recordCrossValidationResults(err, 'records.csv', self.position_features, self.correctness_features, "|".join(range_str_array))
             
-            self.recordErrors("errors.csv", testExamples)
+            self.recordErrors("errors.csv", testExamples, users)
             
             print "CROSS-VALIDATION RESULTS"
             print "ERROR: ", err#np.mean(errors)
