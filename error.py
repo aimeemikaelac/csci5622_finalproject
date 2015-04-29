@@ -35,8 +35,8 @@ class Error:
         truePositives =  str(len([x for x,y in zip(p,o) if x == y and x == 1]))
         falsePositives = str(len([x for x,y in zip(p,o) if x != y and x == 1]))
 
-        print "          0     1  "
-        print "      0  "+trueNegatives+"   "+falseNegatives
+        print "         -1     1  "
+        print "     -1  "+trueNegatives+"   "+falseNegatives
         print "      1  "+falsePositives+"   "+truePositives
 
     def _rootMeanSquaredError(self, predictions, observations):

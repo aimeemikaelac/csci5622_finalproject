@@ -10,10 +10,12 @@ class Example:
     def __init__(self):
         # Training data 
         self.id = -1
-        self.question = -1
-        self.user = -1
+        self.question_id = -1
+        self.user_id = -1
         self.position = 0
         self.answer = ""
+        # Question object
+        self.question = None
         # Observed position from training data
         self.observation =  0           # 'position' from training data. eg. -78, 67
         self.observed_time = 0          # a positive number
@@ -23,24 +25,31 @@ class Example:
         self.predicted_time = 0         # a positive number
         self.predicted_correctness = 0  # -1 or 1
 
-def loadTrainingExamples(trainingFile):
-    # Read training examples
-    fin = open(trainingFile, 'rt')
+def loadExamples(exampleFile, questions):
+    # Read examples from training or test file
+    fin = open(exampleFile, 'rt')
     reader = csv.DictReader(fin)
     examples = []
     for row in reader:
         example = Example()
-        example.id = stringToInt(row['id'])
-        example.question = stringToInt(row['question'])
-        example.user = stringToInt(row['user'])
-        example.position = stringToInt(row['position'])
-        example.answer = row['answer']
-        #example.question = questions[stringToInt(row['question'])]
-        example.observation = stringToInt(row['position'])
-        example.observed_time = abs(example.observation)
-        example.observed_correctness = example.observation / example.observed_time
+        # Values in all training and test sets 
+        example.id = row['id']
+        example.question_id = row['question']
+        example.user_id = row['user']
+        example.question = questions[example.question_id]
+
+        # Values that are not in final test set
+        try:
+            example.position = stringToInt(row['position'])
+            example.answer = row['answer']
+            example.observation = stringToInt(row['position'])
+            example.observed_time = abs(example.observation)
+            example.observed_correctness = example.observation / example.observed_time
+        except KeyError:
+            pass
+ 
         examples.append(example)
     fin.close()
-    return examples
 
+    return examples
 

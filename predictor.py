@@ -13,17 +13,18 @@ class Predictor:
         self.categories = set([x.category for x in questions.values()])
         self.users = {}
 
-        #self.positionPredictor = Position_Regression()
-        self.positionPredictor = Position_Mean()
+        self.positionPredictor = Position_Regression()
+        #self.positionPredictor = Position_Mean()
 
-        #self.accuracyPredictor = Accuracy_Regression()
+        self.accuracyPredictor = Accuracy_Regression()
         #self.accuracyPredictor = Accuracy_AllCorrect()
-        self.accuracyPredictor = Accuracy_Boost()
+        #self.accuracyPredictor = Accuracy_Boost()
+        #self.accuracyPredictor = Accuracy_SVM()
 
     def producePredictions(self, trainingSet, testSet):
         # Generate some additional data from training set
-        print "GENERATE ADDITIONAL QUESTION DATA"
-        generateQuestionData(self.questions, trainingSet)
+        #print "GENERATE ADDITIONAL QUESTION DATA"
+        #generateQuestionData(self.questions, trainingSet)
         print "GENERATE USER DATA"
         self.users = generateUserData(trainingSet, self.categories, self.questions)
         print "CALCULATE PREDICTIONS"
@@ -44,14 +45,14 @@ class Predictor:
 
 
 
-class FeaturePredictor:
+class FeaturePredictor(object):
     def __init__(self):
         self.users = {}
 
     def features(self, ex):
         # Produce a vector of features for predicting time-to-answer
         try:
-            user = self.users[ex.user]
+            user = self.users[ex.user_id]
         except KeyError:
             user = self.users[-1]
         features = [
@@ -59,9 +60,26 @@ class FeaturePredictor:
                     len(ex.question.text),
                     ex.question.answer_accuracy,
                     ex.question.mean_position,
-                    len(ex.question.examples),
+                    #len(ex.question.examples),
+                    ex.question.syllables,
+                    ex.question.sentences,
+                    ex.question.lexicon,
+                    ex.question.grade_level,
+                    ex.question.reading_ease,
+        
+                    ex.question.automated_readability,
+                    ex.question.smog,
+                    ex.question.fog,
+                    ex.question.coleman_liau,
+                    ex.question.linsear_write,
+                    ex.question.dale_chall,
+                    ex.question.readability_consensus,
+                    ex.question.difficult,
+
+
+
                     # User features
-                    len(user.examples),
+                    len(user.examples) * user.mean_accuracy ,
                     user.mean_accuracy,
                     user.mean_position,
                     len(user.category_examples[ex.question.category]),
@@ -69,7 +87,7 @@ class FeaturePredictor:
                     user.category_position[ex.question.category],
                     self.users[-1].category_accuracy[ex.question.category],
                     self.users[-1].category_position[ex.question.category],
-                        ]
+                 ]
         return features
 
 
@@ -86,6 +104,7 @@ class Position_Regression(FeaturePredictor):
         Y = [x.observed_time for x in trainingSet]
         logreg = linear_model.LinearRegression()
         logreg.fit(X,Y)
+        print "POSITION COEF:", logreg.coef_
         for example in testSet:
             X = self.features(example)
             Y = logreg.predict(X)
@@ -99,15 +118,22 @@ class Accuracy_Regression(FeaturePredictor):
     def __init__(self):
         self.users = {}
 
+    def features(self, ex):
+        f = super(Accuracy_Regression, self).features(ex)
+        f.append(ex.predicted_time)
+        f.append(ex.predicted_time / ex.question.lexicon)
+        return f
+
     def predict(self, trainingSet, testSet):
         # Logistic regression to predict correctness
         X = [self.features(x) for x in trainingSet]
         Y = [x.observed_correctness for x in trainingSet]
-        logreg = linear_model.LogisticRegression(C=10000)
+        logreg = linear_model.LogisticRegression(C=100)
         logreg.fit(X,Y)
-        print logreg.coef_
+        print "ACCURACY COEF:", logreg.coef_
         for example in testSet:
             X = self.features(example)
+            #print "X:", X
             Y = logreg.predict(X)
             example.predicted_correctness = Y[0]
 
@@ -147,8 +173,9 @@ class Accuracy_SVM(FeaturePredictor):
         # SVM to predict correctness
         X = [self.features(x) for x in trainingSet]
         Y = [x.observed_correctness for x in trainingSet]
-        svc = SVC()
+        svc = SVC(C=1.0, kernel="linear")
         svc.fit(X,Y)
+        print "ACCURACY COEF:",svc.coef_
         for example in testSet:
             X = self.features(example)
             Y = svc.predict(X)
@@ -157,6 +184,49 @@ class Accuracy_SVM(FeaturePredictor):
 class Accuracy_Boost(FeaturePredictor):
     def __init__(self):
         self.users = {}
+    def features(self, ex):
+        # Produce a vector of features for predicting time-to-answer
+        try:
+            user = self.users[ex.user_id]
+        except KeyError:
+            user = self.users[-1]
+        features = [
+                    # Question features
+                    len(ex.question.text),
+                    ex.question.answer_accuracy,
+                    ex.question.mean_position,
+                    #len(ex.question.examples),
+                    #ex.question.syllables,
+                    #ex.question.sentences,
+                    #ex.question.lexicon,
+                    #ex.question.grade_level,
+                    #ex.question.reading_ease,
+        
+                    #ex.question.automated_readability,
+                    #ex.question.smog,
+                    #ex.question.fog,
+                    #ex.question.coleman_liau,
+                    #ex.question.linsear_write,
+                    #ex.question.dale_chall,
+                    #ex.question.readability_consensus,
+                    #ex.question.difficult,
+
+
+
+                    # User features
+                    len(user.examples),
+                    user.mean_accuracy,
+                    user.mean_position,
+                    len(user.category_examples[ex.question.category]),
+                    user.category_accuracy[ex.question.category],
+                    user.category_position[ex.question.category],
+                    self.users[-1].category_accuracy[ex.question.category],
+                    self.users[-1].category_position[ex.question.category],
+
+                    ex.predicted_time
+                 ]
+        return features
+
 
     def predict(self, trainingSet, testSet):
         bdt = AdaBoostClassifier(DecisionTreeClassifier(max_depth=1),

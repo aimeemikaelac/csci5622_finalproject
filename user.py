@@ -42,12 +42,12 @@ def generateUserData(trainingSet, categories, questions):
         users[-1].category_accuracy[category] = np.mean( [ positionToAccuracy(x.position) for x in categoryExamples] )
 
     # Training data for specific users 
-    user_IDs = set([x.user for x in trainingSet])
+    user_IDs = set([x.user_id for x in trainingSet])
     for id in user_IDs:
         user = User(id)
         users[id] = user
         # List of training examples for this user
-        user.examples = [x for x in trainingSet if x.user == user.id]
+        user.examples = [x for x in trainingSet if x.user_id == user.id]
         # Average position for all user's training examples
         user.mean_position = np.mean([ abs(x.position)  for x in user.examples])
         # Average accuracy for all user's training examples
@@ -55,7 +55,7 @@ def generateUserData(trainingSet, categories, questions):
         # Per-category data
         for category in categories:
             # List of training examples for this category
-            examples = [x for x in users[-1].category_examples[category] if x.user == user.id]
+            examples = [x for x in users[-1].category_examples[category] if x.user_id == user.id]
             user.category_examples[category] = examples
             if len(examples) > 0:
                 user.category_position[category] = np.mean([ abs(x.position) for x in examples])

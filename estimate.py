@@ -1,74 +1,49 @@
-from random import randint
-from random import random
-from random import shuffle
 import csv
-import sys
-import numpy as np
-from sets import Set
-from sklearn import linear_model
-from sklearn.svm import SVC
 
 from question import *
 from example import *
 from error import *
-from user import *
-from utility import *
 from predictor import *
 
 if __name__ == "__main__":
+    validation = True
+    if validation:
+        questionFile = "questions_validation.csv"
+        trainingFile = "validation_train.csv"
+        testFile = "validation_test.csv"
+    else:
+        questionFile = "questions_augmented.csv"
+        trainingFile = "train.csv"
+        testFile = "test.csv"
+
     # Load Question file into dict: question_id --> Question
-    questions = loadQuestionDict("questions_augmented.csv")
+    questions = loadQuestionDict(questionFile)
 
-    # Load training examples
-    examples = loadTrainingExamples("train.csv")
-    shuffle(examples)
-    for ex in examples:
-        ex.question = questions[ex.question]
+    # Load training and test sets
+    trainingSet = loadExamples(trainingFile, questions)
+    testSet = loadExamples(testFile, questions)
 
-    #examples = examples[:int(.1 * len(examples))]
-    # Initialize Predictor
+    # Create Predictions
     predictor = Predictor(questions)
+    predictor.producePredictions(trainingSet, testSet)
 
-    # Cross validation 
-    training_set_size = .1
-    boundary = int(training_set_size * len(examples))
-    validation_test_set = examples[:boundary ]
-    validation_training_set = examples[boundary:]
+    if validation:
+        # Calculate cross-validation errors 
+        err = Error(testSet)
 
-    predictor.producePredictions(validation_training_set, validation_test_set)
-
-    # Calculate cross-validation errors 
-    err = Error(validation_test_set)
-
-    # Show round results
-    print "RMSE:", err.RMSE
-    print "   RMSE abs(time):", err.RMSE_time
-    print "   ACCURACY:      ", err.accuracy
-    err.confusion()
-    print "-----------------------"
-
-    # Read test file
-    testFile = "test.csv"
-    fin = open(testFile, 'rt')
-    reader = csv.DictReader(fin)
-    testExamples = []
-    for row in reader:
-        example = Example()
-        example.id = stringToInt(row['id'])
-        example.question = questions[stringToInt(row['question'])]
-        example.user = stringToInt(row['user'])
-        testExamples.append(example)
-    fin.close()
-
-    # Generate predictions
-    predictor.producePredictions(examples, testExamples)
+        # Show round results
+        print "RMSE:", err.RMSE
+        print "   RMSE abs(time):", err.RMSE_time
+        print "   ACCURACY:      ", err.accuracy
+        err.confusion()
+        print "-----------------------"
 
     # Produce submission file
     submissionFile = "submission.csv"
     fout = open(submissionFile, 'w')
     writer = csv.writer(fout)
     writer.writerow(("id","position"))
-    for ex in testExamples:
+    for ex in testSet:
         writer.writerow((ex.id, ex.prediction))
     fout.close()
 
