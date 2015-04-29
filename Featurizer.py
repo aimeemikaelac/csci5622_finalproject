@@ -157,6 +157,9 @@ class Featurizer:
         user_features += ":"
         if features['user_num_answered']:
             user_features += str(user.num_questions)
+        user_features += ":"
+        if features['user_num_incorrect']:
+            user_features += str(user.num_incorrect)
             
         return user_features
 

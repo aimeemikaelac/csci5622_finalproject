@@ -47,17 +47,21 @@ class Predictor:
         observations = [x.observation for x in examples]
         return mean_squared_error(predictions, observations) ** 0.5
     
-    def recordErrors(self, errorFileName, examples, users):
+    def recordErrors(self, errorFileName, examples, users, categories):
         sortedExamples = sorted(examples, key=lambda ex:self.rootMeanSquaredError([ex]), reverse=True)
         errorFile = open(errorFileName, 'w')
-        errorFile.write("Example ID,RMS ERROR,User ID,Questions Answered,Actual Response Time,Predicted Response Time,Question Length,Question Answer,Question\n")
+        errorFile.write("Example ID,RMS ERROR,User ID,Num Incorrect,User Average,Questions Answered,"+
+        "Category,Q Average,Category Average,Actual Response Time,Predicted Response Time,"+
+        "Q Length,Q Correct,Q Incorrect,Q Answer,Q\n")
         for ex in sortedExamples:
             raw_question_words = []
             for tuple in ex.question.question:
                 raw_question_words.append(tuple[0])
             raw_question = " ".join(raw_question_words)
             raw_question = raw_question.replace(",","_")
-            errorFile.write(",".join([str(ex.id), str(self.rootMeanSquaredError([ex])), str(ex.user), str(users[ex.user].num_questions), str(ex.observation), str(ex.prediction), str(len(raw_question.split())), ex.question.answer, str(raw_question)])+"\n")
+            errorFile.write(",".join([str(ex.id), str(self.rootMeanSquaredError([ex])), str(ex.user), str(users[ex.user].num_incorrect), str(users[ex.user].average_position), str(users[ex.user].num_questions),
+                                       str(ex.question.category),str(ex.question.average_response), str(categories[ex.question.category].average),str(ex.observation), str(ex.prediction), 
+                                       str(len(raw_question.split())), str(ex.question.num_correct), str(ex.question.num_incorrect), ex.question.answer, str(raw_question)])+"\n")
         errorFile.flush()
         errorFile.close()
         
@@ -115,6 +119,12 @@ class Predictor:
             continuous_classifier = DecisionTreeRegressor()
         elif classifier_type == 'kernel_ridge':
             continuous_classifier = kernel_ridge.KernelRidge(kernel=kernel)
+        elif classifier_type == 'ensemble_adaboost':
+            continuous_classifier = ensemble.AdaBoostRegressor(n_estimators=self.n_estimators)
+        elif classifier_type == 'ensemble_randomforest':
+            continuous_classifier = ensemble.RandomForestRegressor(n_estimators=self.n_estimators)
+        elif classifier_type == 'ensemble_bagging':
+            continuous_classifier = ensemble.BaggingRegressor()
         else:
             continuous_classifier = ensemble.GradientBoostingRegressor(n_estimators=self.n_estimators)
     #     continuous_classifier = ensemble.AdaBoostRegressor(n_estimators=4000)
@@ -244,7 +254,7 @@ class Predictor:
                 classifier_type = continuous_features['continuous_classifier']
             else:
                 classifier_type = ""
-            if classifier_type == 'gaussian_process' or classifier_type == 'decision_tree_regressor' or classifier_type == 'kernel_ridge':
+            if classifier_type == 'gaussian_process' or classifier_type == 'decision_tree_regressor' or classifier_type == 'kernel_ridge' or classifier_type == 'ensemble_randomforest':
                 high_memory_process = True
             binary_features = binary_features_array[cluster_index]
             cluster = clusters[cluster_index]
@@ -351,6 +361,7 @@ class Predictor:
                 correct = False
             answer = row['answer']
             current_category = questions[q_id].category
+#             print position
             current_user.add_question(q_id, correct, position, answer, current_category)
             
             current_example.answer = answer
@@ -462,7 +473,7 @@ class Predictor:
             
             self.recordCrossValidationResults(err, 'records.csv', self.position_features, self.correctness_features, "|".join(range_str_array))
             
-            self.recordErrors("errors.csv", testExamples, users)
+            self.recordErrors("errors.csv", testExamples, users, categories)
             
             print "CROSS-VALIDATION RESULTS"
             print "ERROR: ", err#np.mean(errors)

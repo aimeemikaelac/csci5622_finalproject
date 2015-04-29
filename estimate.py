@@ -62,32 +62,36 @@ if __name__ == "__main__":
                     'numbers':False, 'before_noun':True, 'wiki_answer':True, 'question_count':False, 'question_average':True,
                     'question_percent':False, 'provided_answer':False, 'category_average':False, 'question_answer_percent':True,
                     'user_category_average':True, 'question_length':True, 'question_mark':False, 'question_sentence_count':True,
-                    'question_comma_count':False, 'user_num_answered':False, 'question_double_quote_count':False, 
-                    'question_single_quote_count':False, 'question_asterisk_count':False}
+                    'question_comma_count':False, 'user_num_answered':True, 'question_double_quote_count':False, 
+                    'question_single_quote_count':False, 'question_asterisk_count':False, 'continuous_classifier':'ensemble_randomforest',
+                    'user_num_incorrect':True}
         
         features_abs_50 = {'word':False, 'speech':True, 'capital':True, 'all_upper':True, 'foreign':True, 
                     'unique':True, 'ngram_range':(2,20), 'user_average':True,
                     'numbers':False, 'before_noun':True, 'wiki_answer':False, 'question_count':False, 'question_average':True,
-                    'question_percent':True, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
+                    'question_percent':False, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
                     'user_category_average':True, 'question_length':True, 'question_mark':False, 'question_sentence_count':True,
-                    'question_comma_count':True, 'user_num_answered':False, 'question_double_quote_count':True, 
-                    'question_single_quote_count':False, 'question_asterisk_count':False, 'continuous_classifier':"svr"}
+                    'question_comma_count':True, 'user_num_answered':True, 'question_double_quote_count':True, 
+                    'question_single_quote_count':False, 'question_asterisk_count':False,  'continuous_classifier':'ensemble_randomforest',
+                    'user_num_incorrect':True}
         
         features_abs_100 = {'word':False, 'speech':True, 'capital':True, 'all_upper':True, 'foreign':True, 
                     'unique':True, 'ngram_range':(2,20), 'user_average':True,
-                    'numbers':False, 'before_noun':True, 'wiki_answer':True, 'question_count':False, 'question_average':True,
-                    'question_percent':False, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
+                    'numbers':False, 'before_noun':True, 'wiki_answer':True, 'question_count':False, 'question_average':False,
+                    'question_percent':True, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
                     'user_category_average':False, 'question_length':True, 'question_mark':False, 'question_sentence_count':True,
                     'question_comma_count':True, 'user_num_answered':True, 'question_double_quote_count':True, 
-                    'question_single_quote_count':False, 'question_asterisk_count':False}
+                    'question_single_quote_count':False, 'question_asterisk_count':False, 'continuous_classifier':'ensemble_randomforest',
+                    'user_num_incorrect':True}
         
-        features_abs_200 = {'word':False, 'speech':True, 'capital':True, 'all_upper':False, 'foreign':True, 
-                    'unique':False, 'ngram_range':(2,20), 'user_average':True,
+        features_abs_200 = {'word':False, 'speech':True, 'capital':True, 'all_upper':True, 'foreign':True, 
+                    'unique':True, 'ngram_range':(2,5), 'user_average':True,
                     'numbers':False, 'before_noun':True, 'wiki_answer':True, 'question_count':True, 'question_average':True,
-                    'question_percent':True, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
+                    'question_percent':False, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
                     'user_category_average':True, 'question_length':True, 'question_mark':False, 'question_sentence_count':False,
                     'question_comma_count':False, 'user_num_answered':True, 'question_double_quote_count':True, 
-                    'question_single_quote_count':False, 'question_asterisk_count':False}
+                    'question_single_quote_count':False, 'question_asterisk_count':False, 'continuous_classifier':'ensemble_randomforest',
+                    'user_num_incorrect':True}
         
         features_abs_1000 = {'word':False, 'speech':True, 'capital':True, 'all_upper':True, 'foreign':True, 
                     'unique':True, 'ngram_range':(2,20), 'user_average':True,
@@ -95,7 +99,8 @@ if __name__ == "__main__":
                     'question_percent':False, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
                     'user_category_average':False, 'question_length':True, 'question_mark':False, 'question_sentence_count':True,
                     'question_comma_count':True, 'user_num_answered':True, 'question_double_quote_count':True, 
-                    'question_single_quote_count':False, 'question_asterisk_count':False, 'continuous_classifier':"svr"}
+                    'question_single_quote_count':False, 'question_asterisk_count':False, 'continuous_classifier':'ensemble_randomforest',
+                    'user_num_incorrect':True}
         features_abs_150 = features_abs_100
         features_abs_500 = features_abs_100
         features_abs_5000 = features_abs_100

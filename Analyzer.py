@@ -113,6 +113,8 @@ class Analyzer:
             self.store_numeric_feature(feat_id, 'user_category_average', float(user_features_tokens[1]))
         if self.features['user_num_answered']:
             self.store_numeric_feature(feat_id, 'user_num_answered', int(user_features_tokens[2]))
+        if self.features['user_num_incorrect']:
+            self.store_numeric_feature(feat_id, 'user_num_incorrect', int(user_features_tokens[3]))
 
     def process_answer_string(self, feat_id, answer_string):
         answer_features_tokens = answer_string.split(":")
