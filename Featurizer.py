@@ -1,10 +1,15 @@
 from _collections import defaultdict
 from collections import Counter
-from numpy.random.mtrand import np
 from nltk.corpus import wordnet as wn
+import numpy
+from numpy.core.multiarray import ndarray, zeros
+from numpy.random.mtrand import np
 import re
+from scipy.sparse.csgraph._min_spanning_tree import csr_matrix
 from sklearn.feature_extraction.text import CountVectorizer
+import textstat
 import wikipedia
+from textstat.textstat import textstat as ts
 
 
 VALID_POS = ['FW', 'JJ', 'JJR', 'JJS', 'MD', 'NN', 'NNS', 
@@ -72,13 +77,16 @@ class Featurizer:
         return annotated_words
 
     
-    def get_example_features(self, example_id, features, category_dict, question, user, answer_wiki_features, default=False):
+    def get_example_features(self, example_id, features, category_dict, question, user, answer_wiki_features, examples_list, default=False):
         current_category = question.category
         question_features = self.get_question_features(features, question)
         user_features = self.get_user_features(features, user, current_category)
         answer = question.answer
         question_id = question.q_id
         user_questions = user.questions
+        example_features = ""
+        if features['previous_prediction']:
+            example_features += str(float(examples_list[example_id].previous_prediction)) +":"
         if question_id in user_questions:
             provided_answer = user.questions[question.q_id]['answer']
         else:
@@ -101,20 +109,44 @@ class Featurizer:
     #         for feature in answer_
             feature_string = " ".join(feature_list)
         else:
-            feature_string = str(example_id)+"#"+user_features +"|"+question_features+"|"+answer_features+"|"+category_features
+            feature_string = str(example_id)+"#"+user_features +"|"+question_features+"|"+answer_features+"|"+category_features+"|"+example_features
         return feature_string
 
-    def train_feature(self, examples, users, wiki_data, limit=-1):
-        count_features = self.vectorizer.fit_transform(ex for ex in self.all_examples(limit, examples, users, self.features, self.category_dict, wiki_data, default = self.default))
+    def train_feature(self, examples, users, wiki_data, skip_vectorizer=False, limit=-1):
+        if skip_vectorizer:
+            thing_list = []
+            for ex in self.all_examples(limit, examples, users, self.features, self.category_dict, wiki_data, default = self.default):
+                for thing in self.analyzer.call_function(ex):
+                    thing_list.append(thing)
+#             count_features = csr_matrix([]);
+            new_list = []
+            for i in range(len(examples)):
+                new_list.append(numpy.array([]))
+            print "Numeric feature length: "+str(len(self.analyzer.numeric_features))
+            return self.analyzer.add_numeric_features(new_list)
+        else:
+            count_features = self.vectorizer.fit_transform(ex for ex in self.all_examples(limit, examples, users, self.features, self.category_dict, wiki_data, default = self.default))
         if not self.default:
-            return self.analyzer.add_numeric_features(count_features)
+            return self.analyzer.add_numeric_features(count_features.toarray())
         return count_features
             
 
-    def test_feature(self, examples, users, wiki_data, limit=-1):
-        count_features = self.vectorizer.transform(ex for ex in self.all_examples(limit, examples, users, self.features, self.category_dict, wiki_data, default = self.default))
+    def test_feature(self, examples, users, wiki_data, skip_vectorizer=False, limit=-1):
+        if skip_vectorizer:
+            thing_list = []
+            for ex in self.all_examples(limit, examples, users, self.features, self.category_dict, wiki_data, default = self.default):
+                for thing in self.analyzer.call_function(ex):
+                    thing_list.append(thing)
+#             count_features = csr_matrix(zeros(len(self.analyzer.numeric_features), 1).toarray());
+            print "Numeric feature length: "+str(len(self.analyzer.numeric_features))
+            new_list = []
+            for i in range(len(examples)):
+                new_list.append(numpy.array([]))
+            return self.analyzer.add_numeric_features(new_list)
+        else:
+            count_features = self.vectorizer.transform(ex for ex in self.all_examples(limit, examples, users, self.features, self.category_dict, wiki_data, default = self.default))
         if not self.default:
-                return self.analyzer.add_numeric_features(count_features)
+                return self.analyzer.add_numeric_features(count_features.toarray())
         return count_features
 
     def show_topN(self, classifier, categories, N=10):
@@ -140,7 +172,7 @@ class Featurizer:
         for i in range(len(examples)):
             current_example = examples[i]
             current_user = users[current_example.user]
-            tagged_example_str = self.get_example_features(i,features, category_dict, current_example.question, current_user, answer_wiki_features, default) 
+            tagged_example_str = self.get_example_features(i,features, category_dict, current_example.question, current_user, answer_wiki_features, examples, default) 
             yield tagged_example_str
 
 
@@ -160,6 +192,12 @@ class Featurizer:
         user_features += ":"
         if features['user_num_incorrect']:
             user_features += str(user.num_incorrect)
+        user_features += ":"
+        if features['user_incorrect_average']:
+            user_features += str(user.incorrect_average)
+        user_features += ":"
+        if features['user_correct_average']:
+            user_features += str(user.correct_average)
             
         return user_features
 
@@ -194,9 +232,12 @@ class Featurizer:
         single_quote_count = 0
         asterisk_count = 0
         
+        raw_words = []
+        
         word_index = 0
         for word_tuple in question:
             word = word_tuple[0]
+            raw_words.append(word)
             words[word_index] = word
             question_mark_count += word.count("?")
             period_count += word.count(".")
@@ -206,6 +247,13 @@ class Featurizer:
             asterisk_count += word.count("*")
             pos[word_index] = word_tuple[1]
             word_index = word_index + 1
+            
+        raw_question = " ".join(raw_words)
+        syllables = ts.syllable_count(raw_question)
+        sentences = ts.sentence_count(raw_question)
+        grade_level = ts.flesch_reading_ease(raw_question)#ts.readability_consensus(raw_question)
+        
+        numeric_question_features = ""
         
         c = Counter([values for values in words.itervalues()])
         counts = dict(c)
@@ -252,44 +300,54 @@ class Featurizer:
             annotated_word += ":"
             if features['before_noun'] and not encounteredNoun:
                 annotated_word+="BFRN"
-            annotated_word += ":"
-            if features['question_count']:
-                annotated_word += str(int(question_container.count))
-            annotated_word += ":"
-            if features['question_average']:
-                annotated_word += str(question_container.average_response)
-            annotated_word += ":"
-            if features['question_percent']:
-                annotated_word += str(question_container.absolute_average)
-            annotated_word += ":"
-            if features['question_answer_percent']:
-                annotated_word += str(question_container.average_response_percent)
-            annotated_word += ":"
-            if features['question_length']:
-                annotated_word += str(len(words))
-            annotated_word += ":"
-            if self.features['question_mark']:
-                annotated_word += str(question_mark_count)
-            annotated_word += ":"
-            if self.features['question_sentence_count']:
-                annotated_word += str(period_count)
-            annotated_word += ":"
-            if self.features['question_comma_count']:
-                annotated_word += str(comma_count)
-            annotated_word += ":"
-            if self.features['question_double_quote_count']:
-                annotated_word += str(double_quote_count)
-            annotated_word += ":"
-            if self.features['question_single_quote_count']:
-                annotated_word += str(single_quote_count)
-            annotated_word += ":"
-            if self.features['question_asterisk_count']:
-                annotated_word += str(asterisk_count)
-            
-            
+        
             annotated_words.append(annotated_word)
             prev_word = original_annotated_word
             prev_word_unannotated = word
-            
+        
         tagged = " ".join(annotated_words)
+        
+        #####Numeric question features - seperated by a "_" symbol
+        tagged += "_"
+        if features['question_count']:
+            tagged += str(int(question_container.count))
+        tagged += ":"
+        if features['question_average']:
+            tagged += str(question_container.average_response)
+        tagged += ":"
+        if features['question_percent']:
+            tagged += str(question_container.absolute_average)
+        tagged += ":"
+        if features['question_answer_percent']:
+            tagged += str(question_container.average_response_percent)
+        tagged += ":"
+        if features['question_length']:
+            tagged += str(len(words))
+        tagged += ":"
+        if self.features['question_mark']:
+            tagged += str(question_mark_count)
+        tagged += ":"
+        if self.features['question_sentence_count']:
+            tagged += str(sentences)
+        tagged += ":"
+        if self.features['question_comma_count']:
+            tagged += str(comma_count)
+        tagged += ":"
+        if self.features['question_double_quote_count']:
+            tagged += str(double_quote_count)
+        tagged += ":"
+        if self.features['question_single_quote_count']:
+            tagged += str(single_quote_count)
+        tagged += ":"
+        if self.features['question_asterisk_count']:
+            tagged += str(asterisk_count)
+        tagged += ":"
+        if self.features['syllable_count']:
+            tagged += str(syllables)
+        tagged += ":"
+        if self.features['grade_level']:
+            tagged += str(grade_level)
+        tagged += ":"
+        if self.features['period_count']:
+            tagged += str(period_count)
         return tagged

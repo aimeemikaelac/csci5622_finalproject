@@ -22,6 +22,8 @@ from Example import Example
 from Featurizer import Featurizer
 from Question import Question
 from User import User
+from duplicity.tempdir import default
+from _collections import defaultdict
 
 
 class Predictor:
@@ -66,10 +68,31 @@ class Predictor:
         errorFile.close()
         
     def producePredictionsProcess(self, cluster, cluster_index, cluster_ranges, 
-                                  continuous_features, binary_features, category_dict, 
+                                  continuous_features_in, binary_features_in, category_dict, 
                                   users, wiki_data, trainingExamples, clusters_out, err_val):
+        
+        second_stage_features = ['previous_prediction']
+        continuous_features = defaultdict(lambda: False)
+        binary_features = defaultdict(lambda: False)
+        continuous_second_stage_features = []
+        binary_second_stage_features = []
+        perform_second_stage = False
+        for feature in continuous_features_in:
+            continuous_features[feature] = continuous_features_in[feature]
+        for feature in binary_features_in:
+            binary_features[feature] = binary_features_in[feature]
+        
+        for feature in continuous_features:
+            if feature in second_stage_features and continuous_features[feature]:
+                continuous_second_stage_features.append(feature)
+                perform_second_stage = True
+                continuous_features[feature] = False
+                print "Removing feature: "+str(feature)
+        
         analyzer_abs = Analyzer(features=continuous_features)
         featurizer_abs = Featurizer(category_dict, features=continuous_features, use_default=False, analyzer=analyzer_abs)
+        
+        
         
         analyzer_sign = Analyzer(features=binary_features)
         featurizer_sign = Featurizer(category_dict, features=binary_features, use_default=False, analyzer=analyzer_sign)
@@ -138,6 +161,38 @@ class Predictor:
     #     
         print "Predicting continuous classifier for range: "+range_string
         predictions_abs = continuous_classifier.predict(x_test_abs.toarray())
+        
+        if perform_second_stage:
+            print "Length of predictions before second stage: "+str(len(predictions_abs))
+            for i in range(len(predictions_abs)):
+                current_sign = sign(predictions_abs[i])
+                current_abs = abs(predictions_abs[i])
+                current_question = cluster[i].question
+                if current_abs >= current_question.length:
+                    current_abs = current_question.length
+    #             cluster[i].prediction = int(ceil(random.choice([1, -1])*current_abs))
+                cluster[i].previous_prediction = int(ceil(current_sign*current_abs))
+            
+            second_stage_features_dict = continuous_features#defaultdict(lambda: False)
+            for feature in continuous_second_stage_features:
+                print "Adding feature: "+str(feature)
+                second_stage_features_dict[feature] = True
+            analyzer_abs = Analyzer(features=second_stage_features_dict)
+            featurizer_abs = Featurizer(category_dict, features=second_stage_features_dict, use_default=False, analyzer=analyzer_abs)
+            
+            print "Generating second stage training X for range: "+range_string
+            x_train_abs = featurizer_abs.train_feature(trainingExamples, users, wiki_data, skip_vectorizer=False)
+#             print x_train_abs.toarray()
+            
+            print "Generating second stage test X for range: "+range_string
+            x_test_abs = featurizer_abs.test_feature(cluster, users, wiki_data, skip_vectorizer=False)
+#             print x_test_abs.toarray()
+            
+            print "Fitting second stage training data for range: "+range_string
+            continuous_classifier.fit(x_train_abs.toarray(), y_train_abs)  
+            
+            print "Predicting second stage continuous classifier for range: "+range_string
+            predictions_abs = continuous_classifier.predict(x_test_abs.toarray())
     #     print predictions_abs
         
 #             binary_classifier = SGDClassifier(loss='log', penalty='l2', shuffle=True)
@@ -187,12 +242,16 @@ class Predictor:
 #             current_sign = predictions_binary[i]
             current_sign = sign(predictions_abs[i])
             current_abs = abs(predictions_abs[i])
-            current_question = cluster[i].question
-            if current_abs >= current_question.length:
-                current_abs = current_question.length
-#             cluster[i].prediction = int(ceil(random.choice([1, -1])*current_abs))
-            cluster[i].prediction = int(ceil(current_sign*current_abs))
-            clusters_out.append(cluster[i])
+            if(i < len(cluster)):
+                current_question = cluster[i].question
+                if current_abs >= current_question.length:
+                    current_abs = current_question.length
+    #             cluster[i].prediction = int(ceil(random.choice([1, -1])*current_abs))
+                cluster[i].prediction = int(ceil(current_sign*current_abs))
+                clusters_out.append(cluster[i])
+            else:
+                print "Length of cluster: "+str(len(cluster))+"\n Length of predictions: "+str(len(predictions_abs))+"\nFor range: "+range_string
+                break
         
         current_err = self.rootMeanSquaredError(cluster)
         print str("ERROR for cluster "+str(cluster_index)+": "+str(current_err) +"\n"+
@@ -288,6 +347,7 @@ class Predictor:
                 orig_cluster = clusters[cluster_index]
                 out_cluster = clusters_out[cluster_index]
                 for ex_index in range(len(orig_cluster)):
+#                     print ex_index
                     orig_cluster[ex_index].prediction = out_cluster[ex_index].prediction
         return clusters_error, cluster_ranges
             
@@ -366,6 +426,7 @@ class Predictor:
             
             current_example.answer = answer
             current_example.question.add_question_occurence(position)
+            current_example.previous_prediction = position
             
             
             categories_dict[current_category].add_occurrence(current_user, position)
