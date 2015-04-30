@@ -25,11 +25,11 @@ class User:
         if correct:
             correct_sum = self.correct_average*self.num_correct
             self.num_correct = self.num_correct + 1
-            self.correct_average = (correct_sum+position)/self.num_correct
+            self.correct_average = (correct_sum+position)/float(self.num_correct)
         else:
             incorrect_sum = self.incorrect_average*self.num_incorrect
             self.num_incorrect = self.num_incorrect + 1
-            self.incorrect_average  = (incorrect_sum+position)/self.num_incorrect
+            self.incorrect_average  = (incorrect_sum+position)/float(self.num_incorrect)
         self.num_questions = self.num_questions + 1
         current_category_data = self.category_averages[category]
         current_category_average = current_category_data[0]

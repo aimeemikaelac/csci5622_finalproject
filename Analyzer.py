@@ -118,6 +118,12 @@ class Analyzer:
         if self.features['period_count']:
             self.store_numeric_feature(feat_id, 'syllable_count', int(feat_tokens[13]))
             
+        if self.features['question_incorrect_average']:
+            self.store_numeric_feature(feat_id, 'question_incorrect_average', float(feat_tokens[14]))
+            
+        if self.features['question_correct_average']:
+            self.store_numeric_feature(feat_id, 'question_correct_average', float(feat_tokens[15]))
+            
                         
     def process_user_string(self,feat_id, user_string):
         user_features_tokens = user_string.split(":")

@@ -350,4 +350,10 @@ class Featurizer:
         tagged += ":"
         if self.features['period_count']:
             tagged += str(period_count)
+        tagged += ":"
+        if self.features['question_incorrect_average']:
+            tagged += str(question_container.incorrect_average)
+        tagged += ":"
+        if self.features['question_correct_average']:
+            tagged += str(question_container.correct_average)
         return tagged

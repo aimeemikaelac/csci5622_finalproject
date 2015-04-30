@@ -1,6 +1,10 @@
+from _collections import defaultdict
+from copy import deepcopy
+import copy
 from csv import DictWriter
 import csv
 import datetime
+from duplicity.tempdir import default
 from math import ceil
 from multiprocessing import Manager, Pool
 from multiprocessing import Value
@@ -22,14 +26,12 @@ from Example import Example
 from Featurizer import Featurizer
 from Question import Question
 from User import User
-from duplicity.tempdir import default
-from _collections import defaultdict
 
 
 class Predictor:
     def __init__(self, input_args, position_features, correctness_features, n_estimators=650, 
                  cluster=False, num_clusters=3, cluster_boundaries=[10,50,100], skip_clusters=[],
-                 cluster_training_data=False):
+                 cluster_training_data=False, num_threads=8):
         self.args = input_args
         self.position_features = position_features
         self.correctness_features = correctness_features
@@ -39,6 +41,7 @@ class Predictor:
         self.cluster_boundaries = cluster_boundaries
         self.skip_clusters = skip_clusters
         self.cluster_training_data=cluster_training_data
+        self.num_threads = num_threads
     
     def stringToInt(self, s):
         return int(float(s))  
@@ -71,59 +74,45 @@ class Predictor:
                                   continuous_features_in, binary_features_in, category_dict, 
                                   users, wiki_data, trainingExamples, clusters_out, err_val):
         
-        second_stage_features = ['previous_prediction']
+        second_stage_features = ['previous_prediction', 'binary_classifier', 'perform_binary_classification']
         continuous_features = defaultdict(lambda: False)
         binary_features = defaultdict(lambda: False)
         continuous_second_stage_features = []
-        binary_second_stage_features = []
+        binary_second_stage_features = ['binary_classifier', 'perform_binary_classification']
         perform_second_stage = False
+        perform_binary_classifification = False
         for feature in continuous_features_in:
             continuous_features[feature] = continuous_features_in[feature]
         for feature in binary_features_in:
             binary_features[feature] = binary_features_in[feature]
         
         for feature in continuous_features:
-            if feature in second_stage_features and continuous_features[feature]:
+            if feature in second_stage_features and continuous_features[feature] != False:
                 continuous_second_stage_features.append(feature)
                 perform_second_stage = True
                 continuous_features[feature] = False
                 print "Removing feature: "+str(feature)
+                if feature in binary_second_stage_features:
+                    perform_binary_classifification = True
         
         analyzer_abs = Analyzer(features=continuous_features)
         featurizer_abs = Featurizer(category_dict, features=continuous_features, use_default=False, analyzer=analyzer_abs)
         
-        
-        
-        analyzer_sign = Analyzer(features=binary_features)
-        featurizer_sign = Featurizer(category_dict, features=binary_features, use_default=False, analyzer=analyzer_sign)
         range_string = str(cluster_ranges[cluster_index][0])+" - "+str(cluster_ranges[cluster_index][1])
-    #     featurizer = Featurizer(use_default=True)
         y_train_abs = []
         y_train_sign = []
         for train_example in trainingExamples:
-            y_train_abs.append(train_example.observation)
-#                 y_train_abs.append(abs(train_example.observation))
-#                 y_train_sign.append(sign(train_example.observation))
+            if continuous_features['absolute_continuous_y']:
+                y_train_abs.append(abs(train_example.observation))
+            else:
+                y_train_abs.append(train_example.observation)
+            y_train_sign.append(sign(train_example.observation))
         print "Generating continuous training x for range: "+range_string
         x_train_abs = featurizer_abs.train_feature(trainingExamples, users, wiki_data)
-#             print featurizer_abs.vectorizer.vocabulary_.get('document')
-    #     for feat in x_train:
-    #         print feat
-#             print x_train_abs.toarray()[0]
-#             print x_train_abs.toarray()[50]
-    # #     print x_train.toarray()[4000]
-    # #     del trainingExamples
+        
         print "Generating continuous test x for range: "+range_string
-#             x_test_abs = featurizer_abs.test_feature(testExamples, users, wiki_data)
         x_test_abs = featurizer_abs.test_feature(cluster, users, wiki_data)
           
-          
-    #     classifier = SGDClassifier(loss='log', penalty='l2', shuffle=True)
-    #     
-    #     lr.fit(x_train, y_train)
-      
-    #     continuous_classifier = linear_model.LinearRegression()
-    #     continuous_classifier = svm.NuSVR()
         if 'kernel' in continuous_features:
             kernel = continuous_features['kernel']
         else:
@@ -150,9 +139,6 @@ class Predictor:
             continuous_classifier = ensemble.BaggingRegressor()
         else:
             continuous_classifier = ensemble.GradientBoostingRegressor(n_estimators=self.n_estimators)
-    #     continuous_classifier = ensemble.AdaBoostRegressor(n_estimators=4000)
-    #     continuous_classifier = ensemble.RandomForestRegressor()
-    #     continuous_classifier = ensemble.BaggingRegressor()
           
         print "Fitting continuous classifier for range: "+range_string  
         continuous_classifier.fit(x_train_abs.toarray(), y_train_abs)  
@@ -161,6 +147,19 @@ class Predictor:
     #     
         print "Predicting continuous classifier for range: "+range_string
         predictions_abs = continuous_classifier.predict(x_test_abs.toarray())
+        
+        absolute_cluster = []
+        for ex in cluster:
+            new_ex = copy.deepcopy(ex)
+            new_ex.observation = abs(new_ex.observation)
+            absolute_cluster.append(new_ex)
+        for i in range(len(predictions_abs)):
+            absolute_cluster[i].prediction = abs(predictions_abs[i])
+            
+        absolute_error = self.rootMeanSquaredError(absolute_cluster)
+        print str("RMS error of absolute regression for range: "+range_string+"\n"+
+                  "Error: "+str(absolute_error))
+        del absolute_cluster
         
         if perform_second_stage:
             print "Length of predictions before second stage: "+str(len(predictions_abs))
@@ -172,54 +171,72 @@ class Predictor:
                     current_abs = current_question.length
     #             cluster[i].prediction = int(ceil(random.choice([1, -1])*current_abs))
                 cluster[i].previous_prediction = int(ceil(current_sign*current_abs))
-            
-            second_stage_features_dict = continuous_features#defaultdict(lambda: False)
-            for feature in continuous_second_stage_features:
-                print "Adding feature: "+str(feature)
-                second_stage_features_dict[feature] = True
-            analyzer_abs = Analyzer(features=second_stage_features_dict)
-            featurizer_abs = Featurizer(category_dict, features=second_stage_features_dict, use_default=False, analyzer=analyzer_abs)
-            
-            print "Generating second stage training X for range: "+range_string
-            x_train_abs = featurizer_abs.train_feature(trainingExamples, users, wiki_data, skip_vectorizer=False)
-#             print x_train_abs.toarray()
-            
-            print "Generating second stage test X for range: "+range_string
-            x_test_abs = featurizer_abs.test_feature(cluster, users, wiki_data, skip_vectorizer=False)
-#             print x_test_abs.toarray()
-            
-            print "Fitting second stage training data for range: "+range_string
-            continuous_classifier.fit(x_train_abs.toarray(), y_train_abs)  
-            
-            print "Predicting second stage continuous classifier for range: "+range_string
-            predictions_abs = continuous_classifier.predict(x_test_abs.toarray())
-    #     print predictions_abs
-        
-#             binary_classifier = SGDClassifier(loss='log', penalty='l2', shuffle=True)
-        
-#             binary_classifier = svm.SVC(kernel=kernel, class_weight='auto')
-#             binary_classifier = ensemble.GradientBoostingClassifier(n_estimators=1000)
-# #             binary_classifier = neighbors.KNeighborsClassifier()
-#             print "Fitting binary classifier"
-#             print "Generating binary text x"
-#             print "Generating binary training x"
+            if not perform_binary_classifification:
+                second_stage_features_dict = continuous_features#defaultdict(lambda: False)
+                for feature in continuous_second_stage_features:
+                    print "Adding feature: "+str(feature)
+                    second_stage_features_dict[feature] = True
+                analyzer_abs = Analyzer(features=second_stage_features_dict)
+                featurizer_abs = Featurizer(category_dict, features=second_stage_features_dict, use_default=False, analyzer=analyzer_abs)
+                
+                print "Generating second stage training X for range: "+range_string
+                x_train_abs = featurizer_abs.train_feature(trainingExamples, users, wiki_data, skip_vectorizer=False)
+    #             print x_train_abs.toarray()
+                
+                print "Generating second stage test X for range: "+range_string
+                x_test_abs = featurizer_abs.test_feature(cluster, users, wiki_data, skip_vectorizer=False)
+    #             print x_test_abs.toarray()
+                
+                print "Fitting second stage training data for range: "+range_string
+                continuous_classifier.fit(x_train_abs.toarray(), y_train_abs)  
+                
+                print "Predicting second stage continuous classifier for range: "+range_string
+                predictions_abs = continuous_classifier.predict(x_test_abs.toarray())
+            else:
+                analyzer_sign = Analyzer(features=binary_features)
+                featurizer_sign = Featurizer(category_dict, features=binary_features, use_default=False, analyzer=analyzer_sign)
+                if 'binary_classifier' in binary_features:
+                    binary_classifier_type = binary_features['binary_classifier']
+                else:
+                    binary_classifier_type = False
+                print "Binary classifier type: "+str(binary_classifier_type)
+                if not classifier_type or classifier_type == 'ensemble_gradientboost':
+                    binary_classifier = ensemble.GradientBoostingClassifier(n_estimators=self.n_estimators)
+                elif binary_classifier_type == 'sgd':
+                    binary_classifier = SGDClassifier(loss='log', penalty='l2', shuffle=True)
+                elif binary_classifier_type == 'svm':
+                    binary_classifier = svm.SVC(kernel=kernel, class_weight='auto')
+                elif binary_classifier_type == 'ensemble_randomforest':
+                    binary_classifier = ensemble.RandomForestClassifier(n_estimators=self.n_estimators)
+                else:
+                    binary_classifier = ensemble.GradientBoostingClassifier(n_estimators=self.n_estimators)
+                
+                print "Fitting binary classifier for range: "+range_string
+                
+                print "Generating binary training x for range: "+range_string
 #             
-#             x_train_sign = featurizer_sign.train_feature(trainingExamples, users, wiki_data)
+                x_train_sign = featurizer_sign.train_feature(trainingExamples, users, wiki_data)
 #             
-#             x_test_sign = featurizer_sign.test_feature(cluster, users, wiki_data)
-#         #     
-#         #     
-#             binary_classifier = svm.SVC(kernel=kernel)
-#         #     print x_test_sign.toarray()[0]
-#         #     print x_train_sign.toarray()[0]
-#         # #     binary_classifier = neural_network.BernoulliRBM()
-#             binary_classifier.fit(x_train_sign.toarray(), y_train_sign)
-#         #     
-#             print "Fit binary classifier"
-#             print "Predicting binary classifier"
-#             predictions_binary = binary_classifier.predict(x_test_sign.toarray())
+                print "Generating binary text x for range: "+range_string
+                x_test_sign = featurizer_sign.test_feature(cluster, users, wiki_data)
+
+                binary_classifier.fit(x_train_sign.toarray(), y_train_sign)
+                print "Fit binary classifier for range: "+range_string
+                print "Predicting binary classifier for range: "+range_string
+                predictions_binary = binary_classifier.predict(x_test_sign.toarray())
+                
+                num_correct = 0.0
+                num_incorrect = 0.0
+                for i in range(len(predictions_binary)):
+                    if sign(predictions_binary[i]) == sign(cluster[i].observation):
+                        num_correct += 1.0
+                    else:
+                        num_incorrect += 1.0
+                print str("Binary classifier accuracy for range: "+range_string+"\n"
+                          +"Accuracy: "+str(float(num_correct/(num_correct+num_incorrect)))+"\n"
+                          +"Num Correct: "+str(num_correct)+ "\n"
+                          +"Num Incorrect: "+str(num_incorrect))
 #             
-#         #     print predictions_binary
 #             print "Features importance:"
 #             print continuous_classifier.feature_importances_
         
@@ -241,7 +258,10 @@ class Predictor:
         for i in range(len(predictions_abs)):
 #             current_sign = predictions_binary[i]
             current_sign = sign(predictions_abs[i])
-            current_abs = abs(predictions_abs[i])
+            if perform_binary_classifification:
+                current_abs = sign(predictions_binary[i])
+            else:
+                current_abs = abs(predictions_abs[i])
             if(i < len(cluster)):
                 current_question = cluster[i].question
                 if current_abs >= current_question.length:
@@ -309,13 +329,18 @@ class Predictor:
         for cluster_index in range(len(clusters)):
             high_memory_process = False
             continuous_features = continuous_features_array[cluster_index]
+            binary_features = binary_features_array[cluster_index]
             if 'continuous_classifier' in continuous_features:
                 classifier_type = continuous_features['continuous_classifier']
             else:
                 classifier_type = ""
-            if classifier_type == 'gaussian_process' or classifier_type == 'decision_tree_regressor' or classifier_type == 'kernel_ridge' or classifier_type == 'ensemble_randomforest':
+            if 'binary_classifier' in binary_features:
+                binary_classifier_type = binary_features['binary_classifier']
+            else:
+                binary_classifier_type = ""
+            high_memory_algorithms = ['gaussian_process', 'decision_tree_regressor', 'kernel_ridge', 'ensemble_randomforest']
+            if classifier_type in high_memory_algorithms or binary_classifier_type in high_memory_algorithms:
                 high_memory_process = True
-            binary_features = binary_features_array[cluster_index]
             cluster = clusters[cluster_index]
             if self.cluster_training_data:
                 trainingExamplesCluster = trainingExamples_ranges[cluster_index]
@@ -331,9 +356,15 @@ class Predictor:
                                       args=(cluster, cluster_index, cluster_ranges, continuous_features, 
                                             binary_features, category_dict, users, wiki_data, 
                                             trainingExamplesCluster, cluster_out, err_val))
+            if len(predictor_processes) >= self.num_threads:
+                for process in predictor_processes:
+                    process.join()
+                for process in predictor_processes:
+                    predictor_processes.remove(process)
             if high_memory_process:
                 for process in predictor_processes:
                     process.join()
+                for process in predictor_processes:
                     predictor_processes.remove(process)
                 print "Starting high memory process"
             predictor_processes.append(current_process)

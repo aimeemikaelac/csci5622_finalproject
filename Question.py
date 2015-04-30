@@ -10,6 +10,8 @@ class Question:
         self.num_incorrect = 0
         self.average_response = 0.0
         self.absolute_average = 0.0
+        self.correct_average = 0.0
+        self.incorrect_average = 0.0
         self.percent_correct = 0
         self.count = 0
         self.min = 0.0
@@ -28,9 +30,13 @@ class Question:
         self.running_magnitude_total += abs(response_time)
         self.count += 1
         if response_time > 0:
+            correct_total = self.correct_average*self.num_correct
             self.num_correct += 1
+            self.correct_average = (correct_total+response_time)/float(self.num_correct)
         else:
+            incorrect_total = self.incorrect_average*self.num_incorrect
             self.num_incorrect += 1
+            self.incorrect_average = (incorrect_total+response_time)/float(self.num_incorrect)
             
         self.percent_correct = float(self.num_correct) / float(self.count)
         self.absolute_average = (float(self.running_total))/float(self.count)
