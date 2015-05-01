@@ -5,10 +5,11 @@ from csv import DictWriter
 import csv
 import datetime
 from duplicity.tempdir import default
-from math import ceil
+from math import ceil, floor
 from multiprocessing import Manager, Pool
 from multiprocessing import Value
 from multiprocessing.process import Process
+from nltk.classify.decisiontree import DecisionTreeClassifier
 from numpy import sign
 from numpy.ctypeslib import ctypes
 import os
@@ -18,7 +19,9 @@ from sklearn import ensemble, svm, neighbors, gaussian_process, kernel_ridge
 from sklearn.linear_model.stochastic_gradient import SGDClassifier
 from sklearn.metrics.regression import mean_squared_error
 from sklearn.tree.tree import DecisionTreeRegressor
+import sys
 import time
+import wikipedia
 
 from Analyzer import Analyzer
 from Category import Category
@@ -26,6 +29,7 @@ from Example import Example
 from Featurizer import Featurizer
 from Question import Question
 from User import User
+from wikipedia.exceptions import DisambiguationError
 
 
 class Predictor:
@@ -108,10 +112,10 @@ class Predictor:
                 y_train_abs.append(train_example.observation)
             y_train_sign.append(sign(train_example.observation))
         print "Generating continuous training x for range: "+range_string
-        x_train_abs = featurizer_abs.train_feature(trainingExamples, users, wiki_data)
+        x_train_abs,abs_features = featurizer_abs.train_feature(trainingExamples, users, wiki_data)
         
         print "Generating continuous test x for range: "+range_string
-        x_test_abs = featurizer_abs.test_feature(cluster, users, wiki_data)
+        x_test_abs,abs_features_2 = featurizer_abs.test_feature(cluster, users, wiki_data)
           
         if 'kernel' in continuous_features:
             kernel = continuous_features['kernel']
@@ -137,6 +141,8 @@ class Predictor:
             continuous_classifier = ensemble.RandomForestRegressor(n_estimators=self.n_estimators)
         elif classifier_type == 'ensemble_bagging':
             continuous_classifier = ensemble.BaggingRegressor()
+        elif classifier_type == 'ensemble_extratrees':
+            continuous_classifier = ensemble.ExtraTreesClassifier(n_estimators=self.n_estimators)
         else:
             continuous_classifier = ensemble.GradientBoostingRegressor(n_estimators=self.n_estimators)
           
@@ -148,6 +154,33 @@ class Predictor:
         print "Predicting continuous classifier for range: "+range_string
         predictions_abs = continuous_classifier.predict(x_test_abs.toarray())
         
+        print str("Continuous features: \n")#+str(abs_features))
+        
+        feats = []
+        if hasattr(continuous_classifier, 'coef_'):
+            feats = continuous_classifier.coef_
+#             print str("Continuous classifier coefficients: \n"
+#                       +str(continuous_classifier.coef_))
+        elif hasattr(continuous_classifier, 'feature_importances_'):
+            feats = continuous_classifier.feature_importances_
+#             print str("Coninuous classifier feature importance: \n"
+#                       +str(continuous_classifier.feature_importances_))
+            
+        abs_feats_labelled = []
+        if len(feats) == len(abs_features):
+            for feat_index in abs_features:
+                abs_feats_labelled.append("Index: "+str(feat_index)+" Label: "+str(abs_features[feat_index])+" Importance: "+str(feats[int(feat_index)]) + " | ")
+            print_str = ""
+            for feat_index in range(len(abs_feats_labelled)):
+                print_str += str(abs_feats_labelled[feat_index])
+                if feat_index % 3 == 0 and feat_index > 0:
+                    print_str += "\n"
+            print print_str
+        else:
+            print "Feature labels and importances lengthes do not match"
+            print dict(feats)
+            print abs_features
+        
         absolute_cluster = []
         for ex in cluster:
             new_ex = copy.deepcopy(ex)
@@ -155,7 +188,7 @@ class Predictor:
             absolute_cluster.append(new_ex)
         for i in range(len(predictions_abs)):
             absolute_cluster[i].prediction = abs(predictions_abs[i])
-            
+             
         absolute_error = self.rootMeanSquaredError(absolute_cluster)
         print str("RMS error of absolute regression for range: "+range_string+"\n"+
                   "Error: "+str(absolute_error))
@@ -208,6 +241,12 @@ class Predictor:
                     binary_classifier = svm.SVC(kernel=kernel, class_weight='auto')
                 elif binary_classifier_type == 'ensemble_randomforest':
                     binary_classifier = ensemble.RandomForestClassifier(n_estimators=self.n_estimators)
+                elif binary_classifier_type == 'ensemble_adaboost':
+                    binary_classifier = ensemble.AdaBoostClassifier(n_estimators=self.n_estimators)
+                elif binary_classifier_type == 'ensemble_extratrees':
+                    binary_classifier = ensemble.ExtraTreesClassifier(n_estimators=self.n_estimators)
+                elif binary_classifier_type == 'decision_tree':
+                    binary_classifier = DecisionTreeClassifier()
                 else:
                     binary_classifier = ensemble.GradientBoostingClassifier(n_estimators=self.n_estimators)
                 
@@ -215,10 +254,10 @@ class Predictor:
                 
                 print "Generating binary training x for range: "+range_string
 #             
-                x_train_sign = featurizer_sign.train_feature(trainingExamples, users, wiki_data)
+                x_train_sign, sign_features = featurizer_sign.train_feature(trainingExamples, users, wiki_data)
 #             
                 print "Generating binary text x for range: "+range_string
-                x_test_sign = featurizer_sign.test_feature(cluster, users, wiki_data)
+                x_test_sign, sign_features_2 = featurizer_sign.test_feature(cluster, users, wiki_data)
 
                 binary_classifier.fit(x_train_sign.toarray(), y_train_sign)
                 print "Fit binary classifier for range: "+range_string
@@ -236,7 +275,31 @@ class Predictor:
                           +"Accuracy: "+str(float(num_correct/(num_correct+num_incorrect)))+"\n"
                           +"Num Correct: "+str(num_correct)+ "\n"
                           +"Num Incorrect: "+str(num_incorrect))
-#             
+                
+                print str("Binary features: \n")#+str(sign_features))
+                
+                feats = []
+                if hasattr(binary_classifier, 'coef_'):
+                    feats = binary_classifier.coef_
+#                     print str("Binary classifier coefficients: \n"
+#                               +str(binary_classifier.coef_))
+                elif hasattr(binary_classifier, 'feature_importances_'):
+                    feats = binary_classifier.feature_importances_
+#                     print str("Binary classifier feature importance: \n"
+#                               +str(binary_classifier.feature_importances_))
+                sign_feats_labelled = []
+                if len(feats) == len(sign_features):
+                    for feat_index in sign_features:
+                        sign_feats_labelled.append("Index: "+str(feat_index)+" Label: "+str(sign_features[feat_index])+" Importance: "+str(feats[int(feat_index)])+ " | ")
+                    for feat_index in range(len(sign_feats_labelled)):
+                        print_str += str(sign_feats_labelled[feat_index])
+                        if feat_index % 3 == 0 and feat_index > 0:
+                            print_str += "\n"
+                    print print_str
+                else:
+                    print "Feature labels and importances lengthes do not match"
+                    print dict(feats)
+                    print sign_features
 #             print "Features importance:"
 #             print continuous_classifier.feature_importances_
         
@@ -257,17 +320,19 @@ class Predictor:
         
         for i in range(len(predictions_abs)):
 #             current_sign = predictions_binary[i]
-            current_sign = sign(predictions_abs[i])
+            current_abs = abs(predictions_abs[i])
             if perform_binary_classifification:
-                current_abs = sign(predictions_binary[i])
+                current_sign = sign(predictions_binary[i])
             else:
-                current_abs = abs(predictions_abs[i])
+                current_sign = sign(predictions_abs[i])
             if(i < len(cluster)):
                 current_question = cluster[i].question
                 if current_abs >= current_question.length:
                     current_abs = current_question.length
     #             cluster[i].prediction = int(ceil(random.choice([1, -1])*current_abs))
-                cluster[i].prediction = int(ceil(current_sign*current_abs))
+                prediction = int(ceil(current_sign*current_abs))
+#                 print prediction
+                cluster[i].prediction = prediction 
                 clusters_out.append(cluster[i])
             else:
                 print "Length of cluster: "+str(len(cluster))+"\n Length of predictions: "+str(len(predictions_abs))+"\nFor range: "+range_string
@@ -407,6 +472,7 @@ class Predictor:
             infile = open(wiki_file, 'rb')
             print "Loading Wikipedia data"
             wiki_data = pickle.load(infile)
+#             print wiki_data
             infile.close()
             return wiki_data
         else:
@@ -422,6 +488,67 @@ class Predictor:
         pickle.dump(wiki_data, outfile)
         outfile.flush()
         outfile.close()
+        
+    def get_all_wiki_features_process(self, wiki_features, examples, questions, users, incorrect_threshold):
+        for ex in examples:
+            answer = ex.question.answer
+            if answer not in wiki_features:
+                u_id = ex.user
+                user = users[u_id]
+                question = ex.question
+                q_id = question.q_id
+                if q_id in user.questions:
+                    user_question_record = user.questions[q_id]
+                    provided_answer = user_question_record['answer']
+                else:
+                    provided_answer = ""
+                self.get_wiki_feature(wiki_features, answer, incorrect_threshold, provided_answer)
+    
+    def get_all_wiki_features(self, examples, questions, users, incorrect_threshold, num_processes):
+        manager = Manager()
+        shared_wiki_features = manager.dict()
+        processes = []
+        chunksize = int(floor(float(len(examples)/float(num_processes))))
+        for i in range(0, len(examples), chunksize):
+            current_process = Process(target=self.get_all_wiki_features_process, args=(shared_wiki_features, examples[i:i+chunksize], questions, users, incorrect_threshold))
+            processes.append(current_process)
+            current_process.start()
+        for process in processes:
+            process.join()
+        wiki_features = dict(shared_wiki_features)
+#         print wiki_features 
+        return wiki_features
+        
+    def get_wiki_feature(self, answer_wiki_features, answer, incorrect_threshold, provided_answer):
+        results, suggestion = eval(str(wikipedia.search(answer, results=1000000, suggestion=True)))
+#         print results
+        if suggestion is not None:
+            print "Suggestion: "+str(suggestion)+" "+str(len(results))+" answer: "+answer
+            if len(results) <= incorrect_threshold:
+                results = eval(str(wikipedia.search(str(suggestion), results=1000000)))
+        num_results = len(results)
+        if num_results > 0:
+            try:
+                first_result = wikipedia.page(results[0])
+            except DisambiguationError as dis_err:
+                print "Disambiguation for answer: "+str(answer)
+                print dis_err.options
+                dis_suggestion = dis_err.options[0]
+                print "Disambiguation suggestion: "+str(dis_suggestion)
+                first_result = wikipedia.page(str(dis_suggestion))
+    #             answer_wiki_features[answer] = [0,0, 0, None, None]
+            first_len = len(first_result.content)
+            
+            if len(provided_answer) > 0:
+                num_occurences = 0
+                for result in results: 
+                    num_occurences += result.lower().count(provided_answer.lower())
+            else:
+                num_occurences = 0
+            answer_wiki_features[answer] = [num_results,first_len, num_occurences, results, first_result]
+        else:
+            answer_wiki_features[answer] = [num_results, 0, 0, results, None]
+        
 
     def create_example_from_csv(self, users, row, questions, categories_dict, test=False):
         current_example = Example()
@@ -512,14 +639,10 @@ class Predictor:
                 usingWikipediaFeatures = True
                 break
 #         usingWikipediaFeatures = self.position_features['wiki_answer'] or self.correctness_features['wiki_answer']
+        wiki_data_file = self.args.wiki_file
+        regenerate_wiki_features = self.args.regenerate_wiki or not os.path.exists(wiki_data_file) or not os.path.isfile(wiki_data_file)
     
-        if usingWikipediaFeatures and not self.args.regenerate_wiki:
-            wiki_data_file = self.args.wiki_file
-            wiki_data = self.load_wiki_data(wiki_data_file)
-            original_wiki_length = len(wiki_data)
-        else:
-            wiki_data = {}
-            original_wiki_length = 0
+        
         
         questionFile = "questions_processed.csv"
         fin = open(questionFile, 'rt')
@@ -545,6 +668,17 @@ class Predictor:
         
         trainingExamples, testExamples, average_abs = self.create_examples(users, trainingFile, categories, questions, nTrainingSets=self.args.local_selection, generate_test=True, limit=self.args.limit)
         
+        incorrect_threshold = 10
+        if usingWikipediaFeatures and not regenerate_wiki_features:
+            wiki_data = self.load_wiki_data(wiki_data_file)
+            original_wiki_length = len(wiki_data)
+        elif regenerate_wiki_features:
+            wiki_data = self.get_all_wiki_features(trainingExamples + testExamples, questions, users, incorrect_threshold, self.num_threads*5)
+            self.store_wiki_features(wiki_data_file, wiki_data)
+            original_wiki_length = len(wiki_data)
+        else:
+            wiki_data = {}
+            original_wiki_length = 0
         
         print "\nRead data"
         
@@ -594,5 +728,5 @@ class Predictor:
             
         if usingWikipediaFeatures:
             wiki_data_file = self.args.wiki_file
-            if self.args.regenerate_wiki or len(wiki_data) > 0 and original_wiki_length != len(wiki_data):
+            if regenerate_wiki_features or len(wiki_data) > 0 and original_wiki_length != len(wiki_data):
                 self.store_wiki_features(wiki_data_file, wiki_data)

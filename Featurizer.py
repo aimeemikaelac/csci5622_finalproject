@@ -32,47 +32,23 @@ class Featurizer:
         else:
             self.vectorizer = CountVectorizer(analyzer=analyzer)
             self.default = False
-
+            
     def get_answer_features(self, features, answer, answer_wiki_features, provided_answer):
         annotated_words = ""
-        question_string = "'"
-        incorrect_threshold = 10
-        if features['wiki_answer']:
+        question_string = ""
+        if features['wiki_answer'] or features['wiki_num_results']:
             if answer in answer_wiki_features:
                 num_results = answer_wiki_features[answer][0]
+#                 print 'Num Results: '+str(num_results)
                 first_len = answer_wiki_features[answer][1]
+#                 print 'First len: '+str(first_len)
                 num_occurences = answer_wiki_features[answer][2]
                 question_string += "WIKI_NUM:"+str(num_results)+":WIKI_FIRST:"+str(first_len)+":"+str(num_occurences)
+#                 print question_string
             else:
-                try:
-                    results, suggestion = eval(str(wikipedia.search(answer, results=1000000, suggestion=True)))
-                    if suggestion is not None:
-                        print "Suggestion: "+str(suggestion)+" "+str(len(results))+" answer: "+answer
-                        if len(results) <= incorrect_threshold:
-                            results = eval(str(wikipedia.search(str(suggestion), results=1000000)))
-                    num_results = len(results)
-                    question_string += "WIKI_NUM:"+str(num_results)+":WIKI_FIRST:"
-                    if num_results > 0:
-                        first_result = wikipedia.page(str(results[0]))
-                        first_len = len(first_result.content)
-                        question_string+=str(first_len)
-                        
-                        if features['provided_answer'] and len(provided_answer) > 0:
-                            num_occurences = results.lower().count(provided_answer.lower())
-                            print num_occurences
-                            question_string += ":"+str(num_occurences)
-                        else:
-                            num_occurences = 0
-                            question_string += ":0"
-                        answer_wiki_features[answer] = [num_results,first_len, num_occurences, results, first_result]
-                    else:
-                        question_string+="0:0"
-                        answer_wiki_features[answer] = [num_results, 0, 0, results, None]
-                except:
-                    question_string = "WIKI_NUM:0:WIKI_FIRST:0:0"
-                    answer_wiki_features[answer] = [0,0, 0, None, None]
+                question_string = ":0::0:0"
         else:
-            question_string = "::::0"
+            question_string = ":0::0:0"
         annotated_words += question_string+":"
         return annotated_words
 
@@ -113,6 +89,8 @@ class Featurizer:
         return feature_string
 
     def train_feature(self, examples, users, wiki_data, skip_vectorizer=False, limit=-1):
+        feature_names = {}
+        index_count = 0
         if skip_vectorizer:
             thing_list = []
             for ex in self.all_examples(limit, examples, users, self.features, self.category_dict, wiki_data, default = self.default):
@@ -123,15 +101,32 @@ class Featurizer:
             for i in range(len(examples)):
                 new_list.append(numpy.array([]))
             print "Numeric feature length: "+str(len(self.analyzer.numeric_features))
-            return self.analyzer.add_numeric_features(new_list)
+            matrix,numeric_features = self.analyzer.add_numeric_features(new_list)
+            for feat in numeric_features:
+                feature_names[index_count] = feat
+                index_count += 1
+            return matrix, feature_names
         else:
             count_features = self.vectorizer.fit_transform(ex for ex in self.all_examples(limit, examples, users, self.features, self.category_dict, wiki_data, default = self.default))
+            count_features_names = self.vectorizer.vocabulary_
+            for feat_name in count_features_names:
+                feat_index = int(count_features_names[feat_name])
+                feature_names[feat_index] = feat_name
+                if feat_index > index_count:
+                    index_count = feat_index
         if not self.default:
-            return self.analyzer.add_numeric_features(count_features.toarray())
-        return count_features
+            matrix,numeric_features = self.analyzer.add_numeric_features(count_features.toarray())
+            index_count += 1
+            for feat in numeric_features:
+                feature_names[index_count] = feat
+                index_count += 1
+            return matrix, feature_names
+        return count_features, {}
             
 
     def test_feature(self, examples, users, wiki_data, skip_vectorizer=False, limit=-1):
+        feature_names = {}
+        index_count = 0
         if skip_vectorizer:
             thing_list = []
             for ex in self.all_examples(limit, examples, users, self.features, self.category_dict, wiki_data, default = self.default):
@@ -142,11 +137,24 @@ class Featurizer:
             new_list = []
             for i in range(len(examples)):
                 new_list.append(numpy.array([]))
-            return self.analyzer.add_numeric_features(new_list)
+            matrix,numeric_features = self.analyzer.add_numeric_features(new_list)
+            for feat in numeric_features:
+                feature_names[index_count] = feat
+            return matrix, feature_names
         else:
             count_features = self.vectorizer.transform(ex for ex in self.all_examples(limit, examples, users, self.features, self.category_dict, wiki_data, default = self.default))
+            count_features_names = self.vectorizer.vocabulary_
+            for feat_name in count_features_names:
+                feat_index = int(count_features_names[feat_name])
+                feature_names[feat_index] = feat_name
+                if feat_index > index_count:
+                    index_count = feat_index
         if not self.default:
-                return self.analyzer.add_numeric_features(count_features.toarray())
+            matrix,numeric_features = self.analyzer.add_numeric_features(count_features.toarray())
+            index_count += 1
+            for feat in numeric_features:
+                feature_names[index_count] = feat
+            return matrix, feature_names
         return count_features
 
     def show_topN(self, classifier, categories, N=10):

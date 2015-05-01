@@ -143,6 +143,11 @@ class Analyzer:
 
     def process_answer_string(self, feat_id, answer_string):
         answer_features_tokens = answer_string.split(":")
+        if self.features['wiki_num_results']:
+#             print answer_features_tokens
+            if answer_features_tokens[0] == "WIKI_NUM":
+#                 print "WIKI_NUM"
+                self.store_numeric_feature(feat_id, 'wiki_num', int(answer_features_tokens[1]))
         if self.features['wiki_answer']:
             if answer_features_tokens[2] == "WIKI_FIRST":
                 self.store_numeric_feature(feat_id, 'wiki_first', int(answer_features_tokens[3]))
@@ -162,14 +167,19 @@ class Analyzer:
     
     def add_numeric_features(self, feature_matrix_array):
 #         feature_array = feature_matrix.toarray()
+        feature_names = []
+        found_features = False
         feature_array = feature_matrix_array
         new_feature_array = []
         for i in range(len(feature_array)):
             current_features = feature_array[i].tolist()
             for feat_index in self.numeric_features[i]:
+                if not found_features:
+                    feature_names.append(feat_index)
                 current_features.append(self.numeric_features[i][feat_index])
+            found_features = True
             new_feature_array.append(current_features)
-        return csr_matrix(new_feature_array)
+        return csr_matrix(new_feature_array),feature_names
     
     def __call__(self, feature_string):
         for thing in self.call_function(feature_string):
