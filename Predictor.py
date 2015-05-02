@@ -276,7 +276,7 @@ class Predictor:
                           +"Num Correct: "+str(num_correct)+ "\n"
                           +"Num Incorrect: "+str(num_incorrect))
                 
-                print str("Binary features: \n")#+str(sign_features))
+#                 print str("Binary features: \n")#+str(sign_features))
                 
                 feats = []
                 if hasattr(binary_classifier, 'coef_'):
@@ -295,7 +295,7 @@ class Predictor:
                         print_str += str(sign_feats_labelled[feat_index])
                         if feat_index % 3 == 0 and feat_index > 0:
                             print_str += "\n"
-                    print print_str
+                    print "Binary Features for range: "+range_string+"\n"+print_str
                 else:
                     print "Feature labels and importances lengthes do not match"
                     print dict(feats)
