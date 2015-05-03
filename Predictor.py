@@ -15,7 +15,8 @@ from numpy.ctypeslib import ctypes
 import os
 import pickle
 import random
-from sklearn import ensemble, svm, neighbors, gaussian_process, kernel_ridge
+from sklearn import ensemble, svm, neighbors, gaussian_process, kernel_ridge,\
+    mixture
 from sklearn.linear_model.stochastic_gradient import SGDClassifier
 from sklearn.metrics.regression import mean_squared_error
 from sklearn.tree.tree import DecisionTreeRegressor
@@ -111,6 +112,7 @@ class Predictor:
             else:
                 y_train_abs.append(train_example.observation)
             y_train_sign.append(sign(train_example.observation))
+#             print sign(train_example.observation)
         print "Generating continuous training x for range: "+range_string
         x_train_abs,abs_features = featurizer_abs.train_feature(trainingExamples, users, wiki_data)
         
@@ -233,10 +235,14 @@ class Predictor:
                 else:
                     binary_classifier_type = False
                 print "Binary classifier type: "+str(binary_classifier_type)
+                if 'kernel' in binary_features:
+                    kernel = binary_features['kernel']
+                else:
+                    kernel = 'rbf'
                 if not classifier_type or classifier_type == 'ensemble_gradientboost':
                     binary_classifier = ensemble.GradientBoostingClassifier(n_estimators=self.n_estimators)
                 elif binary_classifier_type == 'sgd':
-                    binary_classifier = SGDClassifier(loss='log', penalty='l2', shuffle=True)
+                    binary_classifier = SGDClassifier(loss='hinge', penalty='l1', shuffle=True, n_iter=100)
                 elif binary_classifier_type == 'svm':
                     binary_classifier = svm.SVC(kernel=kernel, class_weight='auto')
                 elif binary_classifier_type == 'ensemble_randomforest':
@@ -247,6 +253,10 @@ class Predictor:
                     binary_classifier = ensemble.ExtraTreesClassifier(n_estimators=self.n_estimators)
                 elif binary_classifier_type == 'decision_tree':
                     binary_classifier = DecisionTreeClassifier()
+                elif binary_classifier_type == 'guassian_mixture':
+                    binary_classifier = mixture.GMM()
+                elif binary_classifier_type == 'dp_guassian_mixture':
+                    binary_classifier = mixture.DPGMM(n_components=200, covariance_type='tied')
                 else:
                     binary_classifier = ensemble.GradientBoostingClassifier(n_estimators=self.n_estimators)
                 
@@ -323,14 +333,26 @@ class Predictor:
             current_abs = abs(predictions_abs[i])
             if perform_binary_classifification:
                 current_sign = sign(predictions_binary[i])
+#                 print current_sign
             else:
                 current_sign = sign(predictions_abs[i])
             if(i < len(cluster)):
                 current_question = cluster[i].question
                 if current_abs >= current_question.length:
+#                     if continuous_features['cap_question_absolute_average']:
+#                         current_abs = abs(current_question.absolute_average)
+#                     elif continuous_features['cap_question_average']:
+#                         current_abs = abs(current_question.average_response)
+#                     else:
                     current_abs = current_question.length
+#                     if continuous_features['invert_cap_sign']:
+#                         current_sign *= -1
+#                         print True
     #             cluster[i].prediction = int(ceil(random.choice([1, -1])*current_abs))
+#                 print current_abs
+#                 print current_sign 
                 prediction = int(ceil(current_sign*current_abs))
+#                 print prediction
 #                 print prediction
                 cluster[i].prediction = prediction 
                 clusters_out.append(cluster[i])
@@ -445,6 +467,7 @@ class Predictor:
                 for ex_index in range(len(orig_cluster)):
 #                     print ex_index
                     orig_cluster[ex_index].prediction = out_cluster[ex_index].prediction
+#                     print out_cluster[ex_index].prediction
         return clusters_error, cluster_ranges
             
         

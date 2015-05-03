@@ -124,6 +124,9 @@ class Analyzer:
         if self.features['question_correct_average']:
             self.store_numeric_feature(feat_id, 'question_correct_average', float(feat_tokens[15]))
             
+        if self.features['question_length_average_difference']:
+            self.store_numeric_feature(feat_id, 'question_length_average_difference', float(feat_tokens[16]))
+            
                         
     def process_user_string(self,feat_id, user_string):
         user_features_tokens = user_string.split(":")

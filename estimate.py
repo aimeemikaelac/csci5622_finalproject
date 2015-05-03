@@ -38,6 +38,7 @@ if __name__ == "__main__":
         features_sign = []
         min_errors = {}
         min_errors_features = {}
+        correct_ranges = []
         for row in reader:
             ranges = row['Range Errors']
             features = row['Features']
@@ -49,6 +50,8 @@ if __name__ == "__main__":
             ranges_tokens = ranges.split("|")
             if len(ranges_tokens) != len(cluster_boundaries):
                 continue
+            else:
+                correct_ranges = ranges
             for range_index in range(len(ranges_tokens)):
                 current_error = float(ranges_tokens[range_index].split(":")[1])
 #                 print "Current error: "+str(current_error)
@@ -56,7 +59,7 @@ if __name__ == "__main__":
                         min_errors[range_index] = current_error
                         min_errors_features[range_index] = [continuous_features_list[range_index], binary_features_list[range_index]]
         for key in sorted(min_errors):
-            print "Error index: "+str(key)+" Error: "+str(min_errors[key])+" Range: "+str(ranges.split("|")[key].split(":")[0])
+            print "Error index: "+str(key)+" Error: "+str(min_errors[key])+" Range: "+str(correct_ranges.split("|")[key].split(":")[0])
             features_abs.append(min_errors_features[key][0])
             features_sign.append(min_errors_features[key][1])
         records_f.close()
@@ -71,7 +74,9 @@ if __name__ == "__main__":
                     'question_single_quote_count':False, 'question_asterisk_count':False,
                     'user_num_incorrect':False, 'user_incorrect_average':True, 'user_correct_average':False, 
                     'syllable_count':False, 'grade_level':False, 'period_count':False, 'question_incorrect_average':True,
-                    'question_correct_average':False, 'perform_binary_classification':True,'absolute_continuous_y':False}
+                    'question_correct_average':False, 'perform_binary_classification':True,'absolute_continuous_y':True, 
+                    'question_length_average_difference':True, 'cap_question_absolute_average':True, 'invert_cap_sign':False,
+                    'cap_question_absolute_average':True}
         
         features_abs_50 = {'word':False, 'speech':False, 'capital':True, 'all_upper':True, 'foreign':True, 
                     'unique':True, 'ngram_range':(1,1), 'user_average':True, 'wiki_num_results':True,
@@ -81,17 +86,21 @@ if __name__ == "__main__":
                     'question_comma_count':True, 'user_num_answered':True, 'question_double_quote_count':True, 
                     'question_single_quote_count':False, 'question_asterisk_count':False,
                     'user_num_incorrect':True, 'user_incorrect_average':False, 'user_correct_average':False,
-                    'syllable_count':False, 'grade_level':True, 'period_count':False, 'perform_binary_classification':True,'absolute_continuous_y':False}
+                    'syllable_count':False, 'grade_level':True, 'period_count':False, 'perform_binary_classification':True,'absolute_continuous_y':False,
+                    'question_length_average_difference':True, 'cap_question_absolute_average':True, 'invert_cap_sign':False,
+                    'cap_question_absolute_average':True}
         
         features_abs_100 = {'word':False, 'speech':False, 'capital':True, 'all_upper':True, 'foreign':True, 
-                    'unique':True, 'ngram_range':(1,1), 'user_average':True, 'wiki_num_results':True,
+                    'unique':True, 'ngram_range':(2,20), 'user_average':True, 'wiki_num_results':True,
                     'numbers':False, 'before_noun':True, 'wiki_answer':False, 'question_count':False, 'question_average':False,
                     'question_percent':True, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
                     'user_category_average':False, 'question_length':True, 'question_mark':False, 'question_sentence_count':True,
                     'question_comma_count':True, 'user_num_answered':True, 'question_double_quote_count':True, 
                     'question_single_quote_count':False, 'question_asterisk_count':False,
                     'user_num_incorrect':True, 'user_incorrect_average':False, 'user_correct_average':False, 
-                    'syllable_count':False, 'grade_level':True, 'period_count':False, 'perform_binary_classification':True,'absolute_continuous_y':False}
+                    'syllable_count':False, 'grade_level':True, 'period_count':False, 'perform_binary_classification':True,'absolute_continuous_y':False,
+                    'question_length_average_difference':True, 'cap_question_absolute_average':True, 'invert_cap_sign':False,
+                    'cap_question_absolute_average':True}
         
         features_abs_200 = {'word':False, 'speech':False, 'capital':True, 'all_upper':True, 'foreign':True, 
                     'unique':True, 'ngram_range':(1,1), 'user_average':True, 'wiki_num_results':True,
@@ -101,7 +110,9 @@ if __name__ == "__main__":
                     'question_comma_count':False, 'user_num_answered':True, 'question_double_quote_count':True, 
                     'question_single_quote_count':False, 'question_asterisk_count':False,
                     'user_num_incorrect':True, 'user_incorrect_average':True, 'user_correct_average':False, 
-                    'syllable_count':False, 'grade_level':True, 'period_count':False, 'perform_binary_classification':True,'absolute_continuous_y':False}
+                    'syllable_count':False, 'grade_level':True, 'period_count':False, 'perform_binary_classification':True,'absolute_continuous_y':False,
+                    'question_length_average_difference':True, 'cap_question_absolute_average':True, 'invert_cap_sign':False,
+                    'cap_question_absolute_average':True}
         
         features_abs_1000 = {'word':False, 'speech':False, 'capital':True, 'all_upper':True, 'foreign':True, 
                     'unique':True, 'ngram_range':(1,1), 'user_average':True, 'wiki_num_results':True,
@@ -111,7 +122,9 @@ if __name__ == "__main__":
                     'question_comma_count':True, 'user_num_answered':True, 'question_double_quote_count':True, 
                     'question_single_quote_count':False, 'question_asterisk_count':False,
                     'user_num_incorrect':True, 'user_incorrect_average':False, 'user_correct_average':False, 
-                    'syllable_count':False, 'grade_level':True, 'period_count':False, 'perform_binary_classification':True,'absolute_continuous_y':False}
+                    'syllable_count':False, 'grade_level':True, 'period_count':False, 'perform_binary_classification':True,'absolute_continuous_y':False,
+                    'question_length_average_difference':True, 'cap_question_absolute_average':True, 'invert_cap_sign':False,
+                    'cap_question_absolute_average':True}
         features_abs_150 = features_abs_100
         features_abs_500 = features_abs_100
         features_abs_5000 = features_abs_100
@@ -130,14 +143,21 @@ if __name__ == "__main__":
 #                     'user_num_incorrect':True, 'user_incorrect_average':True, 'user_correct_average':True, 
 #                     'syllable_count':True, 'grade_level':True, 'period_count':True}
         features_sign_10 = {'all_upper': True, 'user_num_incorrect': True, 'question_single_quote_count': False, 'user_category_average': True, 'period_count': False, 
-                        'question_answer_percent': True, 'ngram_range': (2, 30), 'user_incorrect_average': True, 'numbers': True, 'user_num_answered': True, 
+                        'question_answer_percent': True, 'ngram_range': (2, 10), 'user_incorrect_average': True, 'numbers': True, 'user_num_answered': True, 
                         'question_asterisk_count': False, 'question_length': True, 'unique': True, 'user_average': True, 'question_count': True, 'before_noun': True, 
                         'grade_level': False, 'question_sentence_count': False, 'word': False, 'provided_answer': True, 'category_average': True, 'question_mark': False, 
                         'user_correct_average': True, 'wiki_answer': True, 'wiki_num_results':True, 'previous_prediction': True, 'foreign': True, 'question_percent': True, 'speech': False, 
                         'capital': True, 'question_comma_count': True, 'question_double_quote_count': True, 'question_average': True, 
-                        'syllable_count': False}
-        features_sign = [features_sign_10, features_sign_10, features_sign_10, features_sign_10, features_sign_10,
-                      features_sign_10, features_sign_10, features_sign_10, features_sign_10]
+                        'syllable_count': False, 'question_length_average_difference':True, 'binary_classifier':'svm',}
+        features_sign_200 = {'all_upper': True, 'user_num_incorrect': True, 'question_single_quote_count': False, 'user_category_average': True, 'period_count': False, 
+                        'question_answer_percent': True, 'ngram_range': (1,1), 'user_incorrect_average': True, 'numbers': True, 'user_num_answered': True, 
+                        'question_asterisk_count': False, 'question_length': True, 'unique': True, 'user_average': True, 'question_count': True, 'before_noun': True, 
+                        'grade_level': False, 'question_sentence_count': False, 'word': False, 'provided_answer': True, 'category_average': True, 'question_mark': False, 
+                        'user_correct_average': True, 'wiki_answer': True, 'wiki_num_results':True, 'previous_prediction': True, 'foreign': True, 'question_percent': True, 'speech': False, 
+                        'capital': True, 'question_comma_count': True, 'question_double_quote_count': True, 'question_average': True, 
+                        'syllable_count': False, 'binary_classifier':'svm', 'question_length_average_difference':True}
+        features_sign = [features_sign_10, features_sign_10, features_sign_10, features_sign_10, features_sign_200,
+                      features_sign_10, features_sign_10, features_sign_200, features_sign_200]
     
     predictor = Predictor(args, features_abs, features_sign, cluster=True, n_estimators=500,
                           cluster_boundaries=cluster_boundaries)#, skip_clusters=[1,2,3,4,5,6,7,8])

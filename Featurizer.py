@@ -364,4 +364,7 @@ class Featurizer:
         tagged += ":"
         if self.features['question_correct_average']:
             tagged += str(question_container.correct_average)
+        tagged += ":"
+        if self.features['question_length_average_difference']:
+            tagged += str(int(len(question_container.question) - question_container.correct_average))
         return tagged
