@@ -8,16 +8,21 @@ from numpy import array
 from sklearn import datasets, linear_model, ensemble
 from sklearn.linear_model import SGDClassifier
 from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn import svm
 
 import nltk
 from nltk.corpus import wordnet as wn
 from nltk.tokenize import TreebankWordTokenizer
 from nltk.util import ngrams
 from nltk.corpus import stopwords
+
+import itertools
 
 import re
 
@@ -48,18 +53,21 @@ for ii in questions:
 
 
 
-train = DictReader(open("train3.csv", 'r'))
+train = DictReader(open("train2.csv", 'r'))
 
 
 #Count Vectorize category
 vocab = set()
 pos_tags = set()
 words = set()
+big = set()
 for ii in train:
     vocab.add(question_data[int(ii['question'])][1])
     for jj in eval(question_data[int(ii['question'])][2]):
         pos_tags.add(jj[1])
         words.add(jj[0])
+
+
 vocab = list(vocab)
 pos_tags = list(pos_tags)
 
@@ -75,42 +83,92 @@ pos_counts = cv_pos.fit_transform(pos_tags)
 cv_words = CountVectorizer(vocabulary=words)
 words_counts = cv_words.fit_transform(words)
 
-train = DictReader(open("train3.csv", 'r'))
+
+train = DictReader(open("train2.csv", 'r'))
 dev_train_feats=[]
 dev_test_feats=[]
 dev_train_labels=[]
 dev_test=[]
 
+avg_position = []
 for ii in train:
-    userpos = myround(int(float(ii['AvgUserPos'])),25)
-    questpos = myround(int(float(ii['AvgQuestPos'])),25)
-    diff = myround(int(float(ii['AvgQuestPos'])) - int(float(ii['AvgUserPos'])),10)
+    if (int(ii['id']))%5==0:
+        avg_position.append(int(float(ii['position'])))
+avg_position = np.mean(avg_position)
+
+train = DictReader(open("train2.csv", 'r'))
+for ii in train:
+    userpos = int(float(ii['AvgUserPos']))
+    questpos = int(float(ii['AvgQuestPos']))
+    diff = int(float(ii['AvgQuestPos'])) - int(float(ii['AvgUserPos']))
     cat = cv_category.vocabulary_.get(question_data[int(ii['question'])][1])
-    numans = myround(int(float(ii['QuestAnswered'])),25)
-    qper = myround(float(ii['QuestPercent']),.1)
-    uper = myround(float(ii['UserPercent']),.1)
+    numans = int(float(ii['QuestAnswered']))
+    qper = float(ii['QuestPercent'])
+    uper = float(ii['UserPercent'])
+    cat_pos = int(float(ii['CatPos']))
+    cat_per = float(ii['CatPercent'])
+    # ucpos = int(float(ii['UserCatPos']))
+    # ucper = float(ii['UserCatPercent'])
+    if uper>.5:
+        p = 1
+    else:
+        p = 0
+    if uper>.75:
+        p1 = 1
+    else:
+        p1 = 0
+    if qper>.5:
+        q = 1
+    else:
+        q = 0
 
-    # NPs = 0
-    # NNs = 0
-    # this = 0
-    # dates = 0
-    # counter = 0
-    # for jj in eval(question_data[int(ii['question'])][2]):
-    #     if counter == 0:
-    #         if jj[0]=='This':
-    #             this = 1
-    #         firsttag = cv_pos.vocabulary_.get(jj[1])
-    #         firstword = cv_words.vocabulary_.get(jj[0])
-    #     if counter<userpos:
-    #         if jj[1]=='NP' or jj[1]=='NP-TL':
-    #             NPs += 1
-    #         if jj[1]=='NN' or jj[1]=='NN-TL':
-    #             NNs += 1
-    #         if jj[1]=='CD':
-    #             dates += 1
-    #     counter += 1
+    NPs = 0
+    NNs = 0
+    this = 0
+    dates = 0
+    first20tags = []
+    first20words = []
+    bigramtags = []
+    bigrams = []
+    counter = 0
+    for jj in eval(question_data[int(ii['question'])][2]):
+        if counter<userpos:
+            if jj[1]=='NP' or jj[1]=='NP-TL':
+                NPs += 1
+            if jj[1]=='NN' or jj[1]=='NN-TL':
+                NNs += 1
+            if jj[1]=='CD':
+                dates += 1
+        if counter<30:
+            first20tags.append(cv_pos.vocabulary_.get(jj[1]))
+            first20words.append(cv_words.vocabulary_.get(jj[0]))
+ 
+        counter += 1
+    features = [userpos,questpos,diff,cat,numans,qper,uper, \
+                avg_position,cat_pos,cat_per,p,p1,q,NPs]
+    
+    # if len(first20tags)<30 or len(first20words)<30:
+    #     print len(first20tags), len(first20words)
 
-    features = [userpos,questpos,diff,cat,numans,qper,uper]
+
+    for kk in range(0,30):
+        try:
+            features.append(first20tags[kk])
+        except:
+            features.append(0)
+
+
+
+    # previoustag = 1
+    # for tag in range(0,len(first20words)-1)
+
+    for kk in range(0,30):
+        try:
+            features.append(first20words[kk])
+        except:
+            features.append(0)
+
+    ii['position']=int(float(ii['position']))
 
     if (int(ii['id']))%5==0:
         dev_test.append(ii)
@@ -118,8 +176,12 @@ for ii in train:
 
     else:
         dev_train_feats.append(features)
-        dev_train_labels.append(int(ii['position']))
+        dev_train_labels.append(ii['position'])
 
+# poly = PolynomialFeatures(degree=2)
+# x_train = poly.fit_transform(dev_train_feats)
+# x_test = poly.fit_transform(dev_test_feats)
+# y_train = dev_train_labels
 
 x_train = dev_train_feats
 x_test = dev_test_feats
@@ -134,17 +196,21 @@ print "Training Classifier"
 
 # regr = linear_model.LinearRegression()
 # regr = linear_model.BayesianRidge()
-regr = ensemble.GradientBoostingRegressor(learning_rate=0.5, n_estimators=200, max_depth=3)
+# regr = linear_model.LogisticRegression()
+# regr = linear_model.ARDRegression()
+# regr = linear_model.TheilSenRegressor()
+regr = ensemble.GradientBoostingRegressor(learning_rate=0.003, n_estimators=200, max_depth=3, subsample=.01)
 # regr = ensemble.AdaBoostRegressor()
 regr.fit(x_train, y_train)
 
+# clf = svm.SVC()
+# clf.fit(x_train, y_train)
 
 # predictions = lr.predict(x_test)
 predictions = regr.predict(x_test)
-dict1={}
-for ii, pp in zip([x['id'] for x in dev_test], predictions):
-    # print int(ii), ii, pp
-    dict1[int(ii)]=int(pp)
+# predictions = clf.predict(x_test)
+
+
 
 right=0
 total=len(dev_test)
@@ -156,158 +222,157 @@ for ii in dev_test:
     except KeyError:
         print ii['id'],ii['position']
 
-average = np.mean(answers)
 mm = []
 for ii in answers:
-    mm.append(average)
+    mm.append(avg_position)
 
 
 # print predictions
 # print answers
-
+# rms = mean_squared_error(mm, answers) ** 0.5
 rms = mean_squared_error(predictions, answers) ** 0.5
 print "RMS Accuracy Position Only = ", rms
 
-##########################################################
-##########################################################
-##### Run again for all data and output a submission #####
-##########################################################
-##########################################################
+# ##########################################################
+# ##########################################################
+# ##### Run again for all data and output a submission #####
+# ##########################################################
+# ##########################################################
 
 
 
-## Start training
+# ## Start training
 
 
-train = DictReader(open("train3.csv", 'r'))
-dev_train_feats=[]
-dev_test_feats=[]
-dev_train_labels=[]
-dev_test=[]
+# train = DictReader(open("train3.csv", 'r'))
+# dev_train_feats=[]
+# dev_test_feats=[]
+# dev_train_labels=[]
+# dev_test=[]
 
-for ii in train:
-    userpos = int(float(ii['AvgUserPos']))
-    questpos = int(float(ii['AvgQuestPos']))
-    diff = int(float(ii['AvgQuestPos'])) - int(float(ii['AvgUserPos']))
-    cat = cv_category.vocabulary_.get(question_data[int(ii['question'])][1])
-    numans = int(float(ii['QuestAnswered']))
-    qper = float(ii['QuestPercent'])
-    uper = float(ii['UserPercent'])
+# for ii in train:
+#     userpos = int(float(ii['AvgUserPos']))
+#     questpos = int(float(ii['AvgQuestPos']))
+#     diff = int(float(ii['AvgQuestPos'])) - int(float(ii['AvgUserPos']))
+#     cat = cv_category.vocabulary_.get(question_data[int(ii['question'])][1])
+#     numans = int(float(ii['QuestAnswered']))
+#     qper = float(ii['QuestPercent'])
+#     uper = float(ii['UserPercent'])
 
-    features = [userpos,questpos,diff,cat,numans,qper,uper]
+#     features = [userpos,questpos,diff,cat,numans,qper,uper]
 
-    dev_train_feats.append(features)
-    dev_train_labels.append(int(ii['position']))
+#     dev_train_feats.append(features)
+#     dev_train_labels.append(int(ii['position']))
 
 
-x_train = dev_train_feats
-y_train = dev_train_labels
+# x_train = dev_train_feats
+# y_train = dev_train_labels
         
 
-# Train classifier
-print "Training classifier on all data"
-# lr = SGDClassifier(loss='log', penalty='l2', shuffle=True)
-# lr.fit(x_train, y_train)
+# # Train classifier
+# print "Training classifier on all data"
+# # lr = SGDClassifier(loss='log', penalty='l2', shuffle=True)
+# # lr.fit(x_train, y_train)
 
-# regr = linear_model.LinearRegression()
-# regr = linear_model.BayesianRidge()
-regr = ensemble.GradientBoostingRegressor(learning_rate=0.5, n_estimators=200, max_depth=3)
-# regr = ensemble.AdaBoostRegressor()
-regr.fit(x_train, y_train)
+# # regr = linear_model.LinearRegression()
+# # regr = linear_model.BayesianRidge()
+# regr = ensemble.GradientBoostingRegressor(learning_rate=0.5, n_estimators=200, max_depth=3)
+# # regr = ensemble.AdaBoostRegressor()
+# regr.fit(x_train, y_train)
 
-x_test = []
+# x_test = []
 
-counter = 0
-with open('test2.csv') as f:
-    test = csv.reader(f)
-    for row in test:
-        if counter==0:
-            print row
-        if counter>0:
-            userpos = int(float(row[3]))
-            questpos = int(float(row[4]))
-            diff = questpos-userpos
-            cat = cv_category.vocabulary_.get(row[6])
-            numans = int(row[5])
-            qper = float(row[8])
-            uper = float(row[7])
-        # try:
-        #     qper = data_q[int(ii['question'])][0][1]
-        # except KeyError:
-        #     qper = one_q_per
+# counter = 0
+# with open('test2.csv') as f:
+#     test = csv.reader(f)
+#     for row in test:
+#         if counter==0:
+#             print row
+#         if counter>0:
+#             userpos = int(float(row[3]))
+#             questpos = int(float(row[4]))
+#             diff = questpos-userpos
+#             cat = cv_category.vocabulary_.get(row[6])
+#             numans = int(row[5])
+#             qper = float(row[8])
+#             uper = float(row[7])
+#         # try:
+#         #     qper = data_q[int(ii['question'])][0][1]
+#         # except KeyError:
+#         #     qper = one_q_per
 
-            features = [userpos,questpos,diff,cat,numans,qper,uper]
-            # print features
-            x_test.append(features)
-        counter+=1
+#             features = [userpos,questpos,diff,cat,numans,qper,uper]
+#             # print features
+#             x_test.append(features)
+#         counter+=1
    
  
 
-predictions = regr.predict(x_test)
+# predictions = regr.predict(x_test)
 
 
-# for ii in predictions:
-#     print ii
-
-o = DictWriter(open('pred2.csv', 'w'), ['id', 'position'])
-o.writeheader()
-
-counter = 0
-with open('test2.csv') as f:
-    test = csv.reader(f)
-    for row in test:
-        # if counter == 0:
-        #     print row
-
-        if counter>0:
-
-            o.writerow({'id': row[0], 'position': predictions[counter-1]})
-            # o.writerow({'id': row[0], 'position': 1})
-        counter+=1
-
-# test = DictReader(open('test.csv'),'r')
+# # for ii in predictions:
+# #     print ii
 
 # o = DictWriter(open('pred2.csv', 'w'), ['id', 'position'])
 # o.writeheader()
-# for ii in test:
-#     o.writerow({'id': ii['id'], 'position': final_answers[ii]})
 
+# counter = 0
+# with open('test2.csv') as f:
+#     test = csv.reader(f)
+#     for row in test:
+#         # if counter == 0:
+#         #     print row
+
+#         if counter>0:
+
+#             o.writerow({'id': row[0], 'position': predictions[counter-1]})
+#             # o.writerow({'id': row[0], 'position': 1})
+#         counter+=1
 
 # # test = DictReader(open('test.csv'),'r')
-# for ii in test:
-#     print ii
-#     print int(ii['user'])
-#     userpos = alldata[int(ii['user'])][0][0]
-#     try:
-#         userpos = alldata[int(ii['user'])][0][0]
-#     except KeyError:
-#         userpos = one_q_user_pos
 
-#     try:
-#         questpos = data_q[int(ii['question'])][0][0]
-#         diff = alldata[int(ii['user'])][0][0] - data_q[int(ii['question'])][0][0]
-#     except KeyError:
-#         questpos = one_q_pos
-#         diff = one_q_user_diff
+# # o = DictWriter(open('pred2.csv', 'w'), ['id', 'position'])
+# # o.writeheader()
+# # for ii in test:
+# #     o.writerow({'id': ii['id'], 'position': final_answers[ii]})
 
-#     try:
-#         cat = cv_category.vocabulary_.get(question_data[int(ii['question'])][1])
-#     except:
-#         cat = 4
 
-#     try:
-#         numans = alldata[int(ii['user'])][0][6]
-#     except KeyError:
-#         numans = 1
+# # # test = DictReader(open('test.csv'),'r')
+# # for ii in test:
+# #     print ii
+# #     print int(ii['user'])
+# #     userpos = alldata[int(ii['user'])][0][0]
+# #     try:
+# #         userpos = alldata[int(ii['user'])][0][0]
+# #     except KeyError:
+# #         userpos = one_q_user_pos
 
-#     # try:
-#     #     qper = data_q[int(ii['question'])][0][1]
-#     # except KeyError:
-#     #     qper = one_q_per
+# #     try:
+# #         questpos = data_q[int(ii['question'])][0][0]
+# #         diff = alldata[int(ii['user'])][0][0] - data_q[int(ii['question'])][0][0]
+# #     except KeyError:
+# #         questpos = one_q_pos
+# #         diff = one_q_user_diff
 
-#     features = [userpos,questpos,diff,cat,numans]
-#     print features
-#     dev_test.append(features)
+# #     try:
+# #         cat = cv_category.vocabulary_.get(question_data[int(ii['question'])][1])
+# #     except:
+# #         cat = 4
+
+# #     try:
+# #         numans = alldata[int(ii['user'])][0][6]
+# #     except KeyError:
+# #         numans = 1
+
+# #     # try:
+# #     #     qper = data_q[int(ii['question'])][0][1]
+# #     # except KeyError:
+# #     #     qper = one_q_per
+
+# #     features = [userpos,questpos,diff,cat,numans]
+# #     print features
+# #     dev_test.append(features)
 
    
-# classifier = nltk.classify.NaiveBayesClassifier.train(dev_train + dev_test)
+# # classifier = nltk.classify.NaiveBayesClassifier.train(dev_train + dev_test)
