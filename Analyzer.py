@@ -11,6 +11,7 @@ class Analyzer:
         self.numeric_features = defaultdict(dict)
         self.example_index = 0
         self.example_index_table = {}
+        self.word_counts = defaultdict(lambda: 0.0)
         
     
     def strip_tags_from_words(self, word_list):
@@ -38,7 +39,12 @@ class Analyzer:
         for feat_tuple in question_features:
             feat_tokens = feat_tuple.split(":")
             if self.features['word']: #and self.ngram_range == (1,1):
-                yield feat_tokens[0]
+                pos = feat_tokens[1]
+                if type(self.features['word_pos']) is list and pos in self.features['word_pos']:
+                    word = feat_tokens[0]
+                    self.word_counts[word] += 1
+#                     self.store_numeric_feature(feat_id, word, self.word_counts[word])
+#                     yield feat_tokens[0]
                 
             if self.features['speech']:
                 if feat_tokens[1] != "Unk":

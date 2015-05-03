@@ -16,7 +16,7 @@ import os
 import pickle
 import random
 from sklearn import ensemble, svm, neighbors, gaussian_process, kernel_ridge,\
-    mixture
+    mixture, linear_model
 from sklearn.linear_model.stochastic_gradient import SGDClassifier
 from sklearn.metrics.regression import mean_squared_error
 from sklearn.tree.tree import DecisionTreeRegressor
@@ -60,8 +60,8 @@ class Predictor:
     def recordErrors(self, errorFileName, examples, users, categories):
         sortedExamples = sorted(examples, key=lambda ex:self.rootMeanSquaredError([ex]), reverse=True)
         errorFile = open(errorFileName, 'w')
-        errorFile.write("Example ID,RMS ERROR,User ID,Num Incorrect,User Average,Questions Answered,"+
-        "Category,Q Average,Category Average,Actual Response Time,Predicted Response Time,"+
+        errorFile.write("Example ID,RMS ERROR,User ID,Num Incorrect,U Avg,U Cat Avg,Qs Answered,"+
+        "Cat,Q Avg,Cat Avg,Actual Response Time,Predicted Response Time,"+
         "Q Length,Q Correct,Q Incorrect,Q Answer,Q\n")
         for ex in sortedExamples:
             raw_question_words = []
@@ -69,7 +69,8 @@ class Predictor:
                 raw_question_words.append(tuple[0])
             raw_question = " ".join(raw_question_words)
             raw_question = raw_question.replace(",","_")
-            errorFile.write(",".join([str(ex.id), str(self.rootMeanSquaredError([ex])), str(ex.user), str(users[ex.user].num_incorrect), str(users[ex.user].average_position), str(users[ex.user].num_questions),
+            cat_avg = users[ex.user].category_averages[ex.question.category][0]
+            errorFile.write(",".join([str(ex.id), str(self.rootMeanSquaredError([ex])), str(ex.user), str(users[ex.user].num_incorrect), str(users[ex.user].average_position), str(cat_avg), str(users[ex.user].num_questions),
                                        str(ex.question.category),str(ex.question.average_response), str(categories[ex.question.category].average),str(ex.observation), str(ex.prediction), 
                                        str(len(raw_question.split())), str(ex.question.num_correct), str(ex.question.num_incorrect), ex.question.answer, str(raw_question)])+"\n")
         errorFile.flush()
@@ -145,6 +146,12 @@ class Predictor:
             continuous_classifier = ensemble.BaggingRegressor()
         elif classifier_type == 'ensemble_extratrees':
             continuous_classifier = ensemble.ExtraTreesClassifier(n_estimators=self.n_estimators)
+        elif classifier_type == 'ard':
+            continuous_classifier = linear_model.ARDRegression()
+        elif classifier_type == 'bayesianridge':
+            continuous_classifier = linear_model.BayesianRidge()
+        elif classifier_type == 'perceptron':
+            continuous_classifier = linear_model.Perceptron()
         else:
             continuous_classifier = ensemble.GradientBoostingRegressor(n_estimators=self.n_estimators)
           
@@ -180,7 +187,8 @@ class Predictor:
             print print_str
         else:
             print "Feature labels and importances lengthes do not match"
-            print dict(feats)
+#             print dict(feats)
+            print feats
             print abs_features
         
         absolute_cluster = []
@@ -245,6 +253,8 @@ class Predictor:
                     binary_classifier = SGDClassifier(loss='hinge', penalty='l1', shuffle=True, n_iter=100)
                 elif binary_classifier_type == 'svm':
                     binary_classifier = svm.SVC(kernel=kernel, class_weight='auto')
+                elif binary_classifier_type == 'nu_svm':
+                    binary_classifier = svm.NuSVC(kernel=kernel, class_weight='auto')
                 elif binary_classifier_type == 'ensemble_randomforest':
                     binary_classifier = ensemble.RandomForestClassifier(n_estimators=self.n_estimators)
                 elif binary_classifier_type == 'ensemble_adaboost':
@@ -425,7 +435,7 @@ class Predictor:
                 binary_classifier_type = binary_features['binary_classifier']
             else:
                 binary_classifier_type = ""
-            high_memory_algorithms = ['gaussian_process', 'decision_tree_regressor', 'kernel_ridge', 'ensemble_randomforest']
+            high_memory_algorithms = ['gaussian_process', 'decision_tree_regressor', 'kernel_ridge', 'ensemble_randomforest', 'ard']
             if classifier_type in high_memory_algorithms or binary_classifier_type in high_memory_algorithms:
                 high_memory_process = True
             cluster = clusters[cluster_index]

@@ -55,7 +55,7 @@ class Featurizer:
     
     def get_example_features(self, example_id, features, category_dict, question, user, answer_wiki_features, examples_list, default=False):
         current_category = question.category
-        question_features = self.get_question_features(features, question)
+        question_features = self.get_question_features(features, question, category_dict)
         user_features = self.get_user_features(features, user, current_category)
         answer = question.answer
         question_id = question.q_id
@@ -216,7 +216,7 @@ class Featurizer:
             category_string += str(category_dict[category].average)
         return category_string
         
-    def get_question_features(self, features, question_container):
+    def get_question_features(self, features, question_container, categories):
         question = question_container.question
         category = question_container.category
         keywords = question_container.keywords
@@ -321,6 +321,8 @@ class Featurizer:
             tagged += str(int(question_container.count))
         tagged += ":"
         if features['question_average']:
+            if question_container.average_response == 0:
+                question_container.average_response = -abs(categories[category].average)
             tagged += str(question_container.average_response)
         tagged += ":"
         if features['question_percent']:

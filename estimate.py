@@ -66,68 +66,82 @@ if __name__ == "__main__":
     else:
         
         features_abs_10 = {'word':False, 'speech':True, 'capital':True, 'all_upper':True, 'foreign':True, 
-                    'unique':True, 'ngram_range':(1,1), 'user_average':True, 'wiki_num_results':True,
+                    'unique':True, 'ngram_range':(2,30), 'user_average':True, 'wiki_num_results':True,
                     'numbers':False, 'before_noun':True, 'wiki_answer':True, 'question_count':False, 'question_average':True,
-                    'question_percent':False, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
+                    'question_percent':False, 'provided_answer':False, 'category_average':False, 'question_answer_percent':True,
                     'user_category_average':True, 'question_length':True, 'question_mark':False, 'question_sentence_count':False,
                     'question_comma_count':False, 'user_num_answered':False, 'question_double_quote_count':True, 
                     'question_single_quote_count':False, 'question_asterisk_count':False,
                     'user_num_incorrect':False, 'user_incorrect_average':True, 'user_correct_average':False, 
                     'syllable_count':False, 'grade_level':False, 'period_count':False, 'question_incorrect_average':True,
-                    'question_correct_average':False, 'perform_binary_classification':True,'absolute_continuous_y':True, 
-                    'question_length_average_difference':True, 'cap_question_absolute_average':True, 'invert_cap_sign':False,
-                    'cap_question_absolute_average':True}
+                    'question_correct_average':False, 'perform_binary_classification':False,'absolute_continuous_y':False, 
+                    'question_length_average_difference':True, 'cap_question_absolute_average':False, 'invert_cap_sign':False,
+                    'cap_question_absolute_average':False, 'continuous_classifier':'ensemble_randomforest'}
         
-        features_abs_50 = {'word':False, 'speech':False, 'capital':True, 'all_upper':True, 'foreign':True, 
-                    'unique':True, 'ngram_range':(1,1), 'user_average':True, 'wiki_num_results':True,
-                    'numbers':False, 'before_noun':True, 'wiki_answer':False, 'question_count':False, 'question_average':True,
-                    'question_percent':False, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
-                    'user_category_average':True, 'question_length':True, 'question_mark':False, 'question_sentence_count':True,
-                    'question_comma_count':True, 'user_num_answered':True, 'question_double_quote_count':True, 
-                    'question_single_quote_count':False, 'question_asterisk_count':False,
-                    'user_num_incorrect':True, 'user_incorrect_average':False, 'user_correct_average':False,
-                    'syllable_count':False, 'grade_level':True, 'period_count':False, 'perform_binary_classification':True,'absolute_continuous_y':False,
-                    'question_length_average_difference':True, 'cap_question_absolute_average':True, 'invert_cap_sign':False,
-                    'cap_question_absolute_average':True}
+        features_abs_50 = {'all_upper': True, 'user_num_incorrect': True, 'wiki_answer': False, 'numbers': False, 
+                           'question_single_quote_count': False, 'unique': True, 'provided_answer': False, 'category_average': True, 
+                           'question_percent': False, 'speech': False, 'continuous_classifier': 'svr', 'capital': True, 
+                           'question_comma_count': True, 'question_average': True, 'user_category_average': False, 'question_answer_percent': True, 
+                           'user_num_answered': True, 'question_asterisk_count': False, 'word': False, 'question_sentence_count': True, 
+                           'user_average': True, 'question_count': False, 'before_noun': True, 'question_length': True, 'question_mark': False, 
+                           'ngram_range': (1,20), 'foreign': True, 'question_double_quote_count': True, 'question_length_average_difference':True,
+                           'kernel':'sigmoid'}
         
-        features_abs_100 = {'word':False, 'speech':False, 'capital':True, 'all_upper':True, 'foreign':True, 
-                    'unique':True, 'ngram_range':(2,20), 'user_average':True, 'wiki_num_results':True,
-                    'numbers':False, 'before_noun':True, 'wiki_answer':False, 'question_count':False, 'question_average':False,
-                    'question_percent':True, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
-                    'user_category_average':False, 'question_length':True, 'question_mark':False, 'question_sentence_count':True,
-                    'question_comma_count':True, 'user_num_answered':True, 'question_double_quote_count':True, 
-                    'question_single_quote_count':False, 'question_asterisk_count':False,
-                    'user_num_incorrect':True, 'user_incorrect_average':False, 'user_correct_average':False, 
-                    'syllable_count':False, 'grade_level':True, 'period_count':False, 'perform_binary_classification':True,'absolute_continuous_y':False,
-                    'question_length_average_difference':True, 'cap_question_absolute_average':True, 'invert_cap_sign':False,
-                    'cap_question_absolute_average':True}
+        features_abs_100 = {'all_upper': True, 'wiki_answer': True, 'numbers': False, 'question_single_quote_count': False, 'unique': True, 
+                            'provided_answer': False, 'category_average': True, 'question_percent': False, 'speech': True, 'capital': True, 
+                            'question_comma_count': True, 'question_average': True, 'user_category_average': False, 'question_answer_percent': True, 
+                            'user_num_answered': False, 'question_asterisk_count': False, 'word': False, 'question_sentence_count': True, 
+                            'user_average': True, 'question_count': False, 'before_noun': True, 'question_length': True, 'question_mark': False, 
+                            'ngram_range': (2, 20), 'foreign': True, 'question_double_quote_count': True}
         
-        features_abs_200 = {'word':False, 'speech':False, 'capital':True, 'all_upper':True, 'foreign':True, 
-                    'unique':True, 'ngram_range':(1,1), 'user_average':True, 'wiki_num_results':True,
-                    'numbers':False, 'before_noun':True, 'wiki_answer':True, 'question_count':True, 'question_average':True,
-                    'question_percent':False, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
-                    'user_category_average':True, 'question_length':True, 'question_mark':False, 'question_sentence_count':False,
-                    'question_comma_count':False, 'user_num_answered':True, 'question_double_quote_count':True, 
-                    'question_single_quote_count':False, 'question_asterisk_count':False,
-                    'user_num_incorrect':True, 'user_incorrect_average':True, 'user_correct_average':False, 
-                    'syllable_count':False, 'grade_level':True, 'period_count':False, 'perform_binary_classification':True,'absolute_continuous_y':False,
-                    'question_length_average_difference':True, 'cap_question_absolute_average':True, 'invert_cap_sign':False,
-                    'cap_question_absolute_average':True}
+        features_abs_200 = {'all_upper': True, 'user_num_incorrect': True, 'question_single_quote_count': False, 'question_length_average_difference': True, 
+                            'user_category_average': True, 'period_count': False, 'invert_cap_sign': True, 'question_answer_percent': True, 
+                            'ngram_range': (1, 1), 'user_incorrect_average': True, 'numbers': False, 'user_num_answered': True, 'question_asterisk_count': False, 
+                            'question_length': True, 'unique': True, 'user_average': True, 'question_count': True, 'before_noun': True, 'grade_level': True, 
+                            'wiki_num_results': True, 'question_sentence_count': False, 'word': False, 'provided_answer': False, 'category_average': True, 
+                            'question_mark': False, 'user_correct_average': False, 'wiki_answer': True, 'foreign': True, 'question_percent': False, 
+                            'speech': False, 'capital': True, 'question_comma_count': False, 'question_double_quote_count': True, 
+                            'cap_question_absolute_average': True, 'question_average': True, 'syllable_count': False, 'absolute_continuous_y': False, 
+                            'perform_binary_classification': False}
         
-        features_abs_1000 = {'word':False, 'speech':False, 'capital':True, 'all_upper':True, 'foreign':True, 
-                    'unique':True, 'ngram_range':(1,1), 'user_average':True, 'wiki_num_results':True,
-                    'numbers':False, 'before_noun':True, 'wiki_answer':True, 'question_count':False, 'question_average':True,
-                    'question_percent':False, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
-                    'user_category_average':False, 'question_length':True, 'question_mark':False, 'question_sentence_count':True,
-                    'question_comma_count':True, 'user_num_answered':True, 'question_double_quote_count':True, 
-                    'question_single_quote_count':False, 'question_asterisk_count':False,
-                    'user_num_incorrect':True, 'user_incorrect_average':False, 'user_correct_average':False, 
-                    'syllable_count':False, 'grade_level':True, 'period_count':False, 'perform_binary_classification':True,'absolute_continuous_y':False,
-                    'question_length_average_difference':True, 'cap_question_absolute_average':True, 'invert_cap_sign':False,
-                    'cap_question_absolute_average':True}
+        features_abs_1000 = {'all_upper': True, 'user_num_incorrect': True, 'question_comma_count': True, 'user_category_average': False, 
+                             'period_count': False, 'question_answer_percent': True, 'ngram_range': (1, 1), 'numbers': False, 'user_num_answered': True, 
+                             'question_asterisk_count': False, 'question_single_quote_count': False, 'unique': True, 'user_average': True, 
+                             'question_count': False, 'before_noun': True, 'grade_level': True, 'wiki_num_results': True, 'user_incorrect_average': False, 
+                             'word': False, 'provided_answer': False, 'category_average': True, 'question_mark': False, 'user_correct_average': False, 
+                             'wiki_answer': True, 'foreign': True, 'question_percent': False, 'speech': False, 'perform_binary_classification': True, 
+                             'capital': True, 'question_length': True, 'question_double_quote_count': True, 'question_average': True, 'syllable_count': False, 
+                             'absolute_continuous_y': False, 'question_sentence_count': True}
+        
+        features_abs_5000 = {'all_upper': True, 'wiki_answer': True, 'numbers': False, 'question_single_quote_count': False, 'unique': True, 
+                             'provided_answer': False, 'category_average': True, 'question_percent': False, 'speech': True, 'continuous_classifier': 'svr', 
+                             'capital': True, 'question_comma_count': True, 'question_average': True, 'user_category_average': False, 'question_answer_percent': True, 
+                             'user_num_answered': True, 'question_asterisk_count': False, 'word': False, 'question_sentence_count': True, 'user_average': True, 
+                             'question_count': False, 'before_noun': True, 'question_length': True, 'question_mark': False, 'ngram_range': (2, 15), 'foreign': True, 
+                             'question_double_quote_count': True}
+        
+        features_abs_500 = {'all_upper': True, 'wiki_answer': True, 'numbers': False, 'question_single_quote_count': False, 'unique': True, 'provided_answer': False, 
+                           'category_average': True, 'question_percent': False, 'question_comma_count': True, 'capital': True, 'speech': True, 
+                           'question_average': True, 'user_category_average': False, 'question_answer_percent': True, 'user_num_answered': True, 
+                           'question_asterisk_count': False, 'question_length': True, 'question_sentence_count': True, 'user_average': True, 'question_count': False, 
+                           'before_noun': True, 'word': False, 'question_mark': False, 'ngram_range': (2, 15), 'foreign': True, 'question_double_quote_count': True}
+#                            ,
+#                            'words_pos':['NNS','NN','NNP', 'NNPS'], 'word':True}
+        
+#         {'word':False, 'speech':False, 'capital':True, 'all_upper':True, 'foreign':True, 
+#                     'unique':True, 'ngram_range':(2,20), 'user_average':True, 'wiki_num_results':True,
+#                     'numbers':False, 'before_noun':True, 'wiki_answer':True, 'question_count':False, 'question_average':False,
+#                     'question_percent':False, 'provided_answer':False, 'category_average':True, 'question_answer_percent':True,
+#                     'user_category_average':False, 'question_length':True, 'question_mark':False, 'question_sentence_count':True,
+#                     'question_comma_count':True, 'user_num_answered':True, 'question_double_quote_count':True, 
+#                     'question_single_quote_count':False, 'question_asterisk_count':False,
+#                     'user_num_incorrect':True, 'user_incorrect_average':False, 'user_correct_average':False, 
+#                     'syllable_count':False, 'grade_level':True, 'period_count':False, 'perform_binary_classification':True,'absolute_continuous_y':False,
+#                     'question_length_average_difference':True, 'cap_question_absolute_average':False, 'invert_cap_sign':False,
+#                     'cap_question_absolute_average':True, 'continuous_classifier':'bayesianridge'}
         features_abs_150 = features_abs_100
-        features_abs_500 = features_abs_100
-        features_abs_5000 = features_abs_100
+#         features_abs_500 = features_abs_100
+#         features_abs_5000 = features_abs_1000
         
         features_abs = [features_abs_10, features_abs_50, features_abs_100, features_abs_150, features_abs_200,
                          features_abs_500, features_abs_1000, features_abs_5000, features_abs_100]
@@ -156,10 +170,18 @@ if __name__ == "__main__":
                         'user_correct_average': True, 'wiki_answer': True, 'wiki_num_results':True, 'previous_prediction': True, 'foreign': True, 'question_percent': True, 'speech': False, 
                         'capital': True, 'question_comma_count': True, 'question_double_quote_count': True, 'question_average': True, 
                         'syllable_count': False, 'binary_classifier':'svm', 'question_length_average_difference':True}
+        features_sign_1000 = {'all_upper': True, 'user_num_incorrect': True, 'user_category_average': True, 'user_num_answered': True, 'question_answer_percent': True, 
+                              'ngram_range': (2, 30), 'numbers': True, 'period_count': False, 'question_asterisk_count': False, 'question_single_quote_count': False, 
+                              'unique': True, 'user_average': True, 'question_count': True, 'before_noun': True, 'grade_level': False, 'wiki_num_results': True, 
+                              'user_incorrect_average': True, 'word': False, 'provided_answer': True, 'category_average': True, 'question_mark': False, 
+                              'user_correct_average': True, 'question_double_quote_count': True, 'wiki_answer': True, 'previous_prediction': True, 'foreign': True, 
+                              'question_percent': True, 'question_comma_count': True, 'capital': True, 'speech': True, 'question_length': True, 'question_average': True, 
+                              'syllable_count': False, 'question_sentence_count': False, 'continuous_classifier':'svm'}
+        features_sign_5000 = features_sign_1000
         features_sign = [features_sign_10, features_sign_10, features_sign_10, features_sign_10, features_sign_200,
-                      features_sign_10, features_sign_10, features_sign_200, features_sign_200]
+                      features_sign_10, features_sign_1000, features_sign_5000, features_sign_200]
     
-    predictor = Predictor(args, features_abs, features_sign, cluster=True, n_estimators=500,
+    predictor = Predictor(args, features_abs, features_sign, cluster=True,
                           cluster_boundaries=cluster_boundaries)#, skip_clusters=[1,2,3,4,5,6,7,8])
     predictor.run()
 
