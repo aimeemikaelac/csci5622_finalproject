@@ -86,9 +86,9 @@ class Predictor:
             y_train_abs = []
             y_train_sign = []
             for train_example in trainingExamples:
-#                 y_train_abs.append(train_example.observation)
-                y_train_abs.append(abs(train_example.observation))
-                y_train_sign.append(sign(train_example.observation))
+                y_train_abs.append(train_example.observation)
+#                 y_train_abs.append(abs(train_example.observation))
+#                 y_train_sign.append(sign(train_example.observation))
             print "Generating continuous training x"
             x_train_abs = featurizer_abs.train_feature(trainingExamples, users, wiki_data)
             print featurizer_abs.vectorizer.vocabulary_.get('document')
@@ -126,28 +126,28 @@ class Predictor:
 #             binary_classifier = SGDClassifier(loss='log', penalty='l2', shuffle=True)
             
 #             binary_classifier = svm.SVC(kernel=kernel, class_weight='auto')
-            binary_classifier = ensemble.GradientBoostingClassifier(n_estimators=1000)
-#             binary_classifier = neighbors.KNeighborsClassifier()
-            print "Fitting binary classifier"
-            print "Generating binary text x"
-            print "Generating binary training x"
-            
-            x_train_sign = featurizer_sign.train_feature(trainingExamples, users, wiki_data)
-            
-            x_test_sign = featurizer_sign.test_feature(cluster, users, wiki_data)
-        #     
-        #     
-            binary_classifier = svm.SVC(kernel=kernel)
-        #     print x_test_sign.toarray()[0]
-        #     print x_train_sign.toarray()[0]
-        # #     binary_classifier = neural_network.BernoulliRBM()
-            binary_classifier.fit(x_train_sign.toarray(), y_train_sign)
-        #     
-            print "Fit binary classifier"
-            print "Predicting binary classifier"
-            predictions_binary = binary_classifier.predict(x_test_sign.toarray())
-            
-        #     print predictions_binary
+#             binary_classifier = ensemble.GradientBoostingClassifier(n_estimators=1000)
+# #             binary_classifier = neighbors.KNeighborsClassifier()
+#             print "Fitting binary classifier"
+#             print "Generating binary text x"
+#             print "Generating binary training x"
+#             
+#             x_train_sign = featurizer_sign.train_feature(trainingExamples, users, wiki_data)
+#             
+#             x_test_sign = featurizer_sign.test_feature(cluster, users, wiki_data)
+#         #     
+#         #     
+#             binary_classifier = svm.SVC(kernel=kernel)
+#         #     print x_test_sign.toarray()[0]
+#         #     print x_train_sign.toarray()[0]
+#         # #     binary_classifier = neural_network.BernoulliRBM()
+#             binary_classifier.fit(x_train_sign.toarray(), y_train_sign)
+#         #     
+#             print "Fit binary classifier"
+#             print "Predicting binary classifier"
+#             predictions_binary = binary_classifier.predict(x_test_sign.toarray())
+#             
+#         #     print predictions_binary
             print "Features importance:"
             print continuous_classifier.feature_importances_
             
@@ -167,8 +167,9 @@ class Predictor:
 #                 testExamples[i].prediction = int(ceil(predictions_abs[i]))
         
         for i in range(len(predictions_abs)):
-            current_sign = predictions_binary[i]
-            current_abs = predictions_abs[i]
+#             current_sign = predictions_binary[i]
+            current_sign = sign(predictions_abs[i])
+            current_abs = abs(predictions_abs[i])
 #             cluster[i].prediction = int(ceil(random.choice([1, -1])*current_abs))
             cluster[i].prediction = int(ceil(current_sign*current_abs))
             

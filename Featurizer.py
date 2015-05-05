@@ -181,9 +181,13 @@ class Featurizer:
         words = {}
         pos = {}
         
+        double_quote_count = 0
+        
         word_index = 0
         for word_tuple in question:
-            words[word_index] = word_tuple[0]
+            word = word_tuple[0]
+            double_quote_count += word.count("\"")
+            words[word_index] = word
             pos[word_index] = word_tuple[1]
             word_index = word_index + 1
         
@@ -247,6 +251,9 @@ class Featurizer:
             annotated_word += ":"
             if features['question_length']:
                 annotated_word += str(len(words))
+            annotated_word += ":"
+            if features['double_quote_count']:
+                annotated_word += str(double_quote_count)
             
             
             annotated_words.append(annotated_word)

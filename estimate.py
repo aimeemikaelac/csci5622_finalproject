@@ -22,11 +22,11 @@ if __name__ == "__main__":
                            action='store_true', default=False, required=False)
     args = argparser.parse_args()
     
-    features_abs = {'word':False, 'speech':True, 'capital':True, 'all_upper':False, 'foreign':True, 
+    features_abs = {'word':False, 'speech':True, 'capital':True, 'all_upper':True, 'foreign':True, 
                 'unique':True, 'ngram_range':(2,20), 'user_average':True,
-                'numbers':False, 'before_noun':True, 'wiki_answer':True, 'question_count':False, 'question_average':True,
+                'numbers':False, 'before_noun':True, 'wiki_answer':True, 'question_count':True, 'question_average':True,
                 'question_percent':False, 'provided_answer':True, 'category_average':True, 'question_answer_percent':True,
-                'user_category_average':False, 'question_length':True}
+                'user_category_average':False, 'question_length':True, 'double_quote_count':True}
     
     features_sign = {'word':False, 'speech':True, 'capital':True, 'all_upper':False, 'foreign':True, 
                 'unique':True, 'ngram_range':(2,20), 'user_average':True,
